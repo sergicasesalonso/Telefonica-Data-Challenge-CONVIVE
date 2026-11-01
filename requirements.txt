@@ -8,3 +8,4 @@ networkx>=3.0
 pyarrow>=14
 folium>=0.15
 jupyter
+streamlit>=1.30
