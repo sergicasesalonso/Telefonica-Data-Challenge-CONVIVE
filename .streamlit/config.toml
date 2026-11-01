@@ -1,3 +1,6 @@
 # Local only (NDA): do not send anonymous usage statistics to Streamlit
 [browser]
 gatherUsageStats = false
+
+[server]
+address = "localhost"
