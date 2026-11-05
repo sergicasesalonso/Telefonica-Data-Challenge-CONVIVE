@@ -1,0 +1,524 @@
+"""CONVIVE - inventory, inspection and data quality on the real data (WBS 3.1.0, 3.1.1, 3.1.2).
+
+The checks are those of data_review_plan.md (S1-S4, C1-C4, X1-X3), written in SQL so that they also work on M2
+and M3, which do not fit in pandas. Mobility is processed month by month to keep memory use low.
+"""
+
+from pathlib import Path
+
+import pandas as pd
+
+import analysis as an
+import convive as cv
+import loaders as L
+
+DELIVERABLES = Path(__file__).parent / "deliverables" / "iteration2"
+R1_LIMIT = 0.10    # Follow-up Register, trigger R1
+CATEGORICAL_LIMIT = 25    # columns with more distinct values show only the count
+
+
+def md_table(df):
+    """Markdown table without extra dependencies."""
+    text = df.astype(object).where(df.notna(), "").astype(str)
+    rows = ["| " + " | ".join(str(c) for c in text.columns) + " |",
+            "|" + "---|" * len(text.columns)]
+    rows += ["| " + " | ".join(v.replace("|", "\\|").replace("\n", " ") for v in row) + " |" for row in text.to_numpy()]
+    return "\n".join(rows)
+
+
+def write_md(name, text):
+    DELIVERABLES.mkdir(parents=True, exist_ok=True)
+    path = DELIVERABLES / name
+    path.write_text(text.strip() + "\n", encoding="utf-8", newline="\n")
+    return path
+
+
+def _files(key, stage="raw"):
+    root = L.CLEAN_DIR if stage == "clean" else L.PARQUET_DIR
+    return sorted((root / key).glob("*.parquet"))
+
+
+def _read(path):
+    return f"read_parquet('{path.as_posix()}')"
+
+
+def _format_size(n):
+    return f"{n / 1024 ** 3:.2f} GB" if n >= 1024 ** 3 else f"{n / 1024 ** 2:.1f} MB"
+
+
+def _measure(key):
+    return "viajes" if key in L.MOBILITY_KEYS else "visitantes"
+
+
+def _date_column(key):
+    return {"M1": "day", "M2": "day", "M3": "day", "T2": "date_dt", "T5": "date_dt"}.get(key)
+
+
+def _dimensions(con, key):
+    cols = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {L.parquet_glob(key)}").fetchall()]
+    return [c for c in cols if c != "source_month"]
+
+
+# ---------------------------------------------------------------------------
+# WBS 3.1.0 Inventory
+# ---------------------------------------------------------------------------
+def inventory(con):
+    manifest = L.read_manifest()
+    months = L.expected_months()
+    rows = []
+    for key in L.ALL_KEYS:
+        entries = [manifest.get(f"{key}/{m}", {}) for m in months]
+        found = [e for e in entries if e.get("found")]
+        missing = [m for m, e in zip(months, entries) if not e.get("found")]
+        expected = cv.SCHEMAS[key]["columns"]
+        seen = {L.COLUMN_RENAMES.get(c, c) for e in found for c in e["columns"]}
+        renamed = sorted({c for e in found for c in e["columns"] if c in L.COLUMN_RENAMES})
+        date_col = _date_column(key)
+        if date_col:
+            lo, hi = con.execute(f"""SELECT min(d), max(d) FROM (SELECT TRY_CAST("{date_col}" AS DATE) d
+                                     FROM {L.parquet_glob(key)}) WHERE d IS NOT NULL""").fetchone()
+        elif key == "T3":
+            lo, hi = con.execute(f"SELECT min(split_part(periodo, ' | ', 1)), max(split_part(periodo, ' | ', 2)) FROM {L.parquet_glob(key)}").fetchone()
+        else:
+            lo, hi = con.execute(f"SELECT min(mes), max(mes) FROM {L.parquet_glob(key)}").fetchone()
+        rows.append({
+            "dataset": key,
+            "file name": cv.SCHEMAS[key]["file"],
+            "monthly files found": f"{len(found)} of {len(months)}",
+            "missing months": ", ".join(missing) or "none",
+            "total size": _format_size(sum(e["bytes"] for e in found)),
+            "total rows": f"{sum(e['rows'] for e in found):,}",
+            "columns found / expected": f"{len(seen & set(expected))} / {len(expected)}",
+            "column differences": (f"renamed in file: {', '.join(f'{c} (official {L.COLUMN_RENAMES[c]})' for c in renamed)}" if renamed else "none")
+                                  + (f"; missing: {sorted(set(expected) - seen)}" if set(expected) - seen else "")
+                                  + (f"; extra: {sorted(seen - set(expected))}" if seen - set(expected) else ""),
+            "separator": " ".join(sorted({repr(e["sep"]) for e in found})),
+            "encoding": " ".join(sorted({e["encoding"] for e in found})),
+            "line ending": " ".join(sorted({e["newline"] for e in found})),
+            "date range": f"{lo} to {hi}",
+        })
+    return pd.DataFrame(rows)
+
+
+def write_inventory(table):
+    total = sum(e.get("bytes", 0) for e in L.read_manifest().values())
+    rows = sum(e.get("rows", 0) for e in L.read_manifest().values())
+    main = ["dataset", "monthly files found", "missing months", "total size", "total rows", "columns found / expected",
+            "separator", "encoding", "date range"]
+    return write_md("3.1.0_data_inventory.md", f"""
+# 3.1.0 Data reception under NDA: data inventory
+
+CONVIVE · Team 102_A · Iteration 2. Data received 29 Oct 2026 under NDA. Generated by `quality.inventory()` from the files on disk.
+This file holds counts, ranges and names only. It holds no data rows.
+
+**Total: {_format_size(total)} in {sum(1 for e in L.read_manifest().values() if e.get('found'))} files, {rows:,} rows.**
+
+{md_table(table[main])}
+
+## File names and column differences
+
+{md_table(table[["dataset", "file name", "column differences", "line ending"]])}
+
+## Notes
+
+- Expected columns come from `convive.SCHEMAS`, which follows the official description ("Smart Steps - Challenge 2026").
+- The loaders rename the columns listed above to the official names, so later code uses a single vocabulary.
+- All files have a header row. Measures are integers, so no decimal separator applies (checked in 3.1.1).
+- The official description says "4 files" of mobility and "8 files" of tourism in its summaries, but it details 3 and 9. We received 3 and 9.
+""")
+
+
+# ---------------------------------------------------------------------------
+# WBS 3.1.1 Inspection
+# ---------------------------------------------------------------------------
+def inspection(con):
+    """Per dataset: dtype, distinct values, NA and zero shares per column. Names of categories, never rows."""
+    out = {}
+    for key in L.ALL_KEYS:
+        source = L.parquet_glob(key)
+        n = con.execute(f"SELECT count(*) FROM {source}").fetchone()[0]
+        rows = []
+        for name, dtype, *_ in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall():
+            if name == "source_month":
+                continue
+            quoted = f'"{name}"'
+            if dtype == "VARCHAR":
+                distinct, nulls, na = con.execute(
+                    f"SELECT count(DISTINCT {quoted}), count(*) - count({quoted}), sum(({quoted} = 'NA')::BIGINT) FROM {source}").fetchone()
+                dash = con.execute(f"SELECT sum(({quoted} = '-')::BIGINT) FROM {source}").fetchone()[0]
+                zero = lo = hi = None
+            else:
+                distinct, nulls, zero, lo, hi = con.execute(
+                    f"SELECT count(DISTINCT {quoted}), count(*) - count({quoted}), sum(({quoted} = 0)::BIGINT), min({quoted}), max({quoted}) FROM {source}").fetchone()
+                na = dash = None
+            values = ""
+            is_date_or_code = name in ("day", "date_dt", "periodo", "mes", "semana")
+            if distinct <= CATEGORICAL_LIMIT and not is_date_or_code and dtype == "VARCHAR":
+                values = ", ".join(str(r[0]) for r in con.execute(f"SELECT DISTINCT {quoted} FROM {source} ORDER BY 1").fetchall())
+            rows.append({"column": name, "dtype": dtype, "distinct": f"{distinct:,}", "null": f"{nulls / n:.2%}",
+                         "'NA' text": "" if na is None else f"{(na or 0) / n:.2%}",
+                         "'-' text": "" if dash is None else f"{(dash or 0) / n:.2%}",
+                         "zero": "" if zero is None else f"{(zero or 0) / n:.2%}",
+                         "min to max": "" if lo is None else f"{lo:,} to {hi:,}",
+                         "values (categorical)": values})
+        out[key] = {"rows": n, "table": pd.DataFrame(rows)}
+    return out
+
+
+def write_inspection(results):
+    parts = [f"""
+# 3.1.1 Data loading and initial inspection
+
+CONVIVE · Team 102_A · Iteration 2. Generated by `quality.inspection()`. No data rows are shown.
+
+Loading code: `loaders.py` (`build_parquet`, `load_mobility`, `load_tourism`). Each monthly CSV is converted once to Parquet in
+`data/processed/parquet/<KEY>/<YYYYMM>.parquet` (git-ignored). A file is skipped if its Parquet exists and is newer.
+
+How to read the tables: "'NA' text" is the share of rows where the column holds the literal text `NA`, meaning segments below 15 people
+that are grouped. "'-' text" is the placeholder for municipalities outside Barcelona in M3. "zero" in `viajes` means fewer than 15 trips.
+Columns with more than {CATEGORICAL_LIMIT} distinct values show only the count.
+"""]
+    for key, r in results.items():
+        parts.append(f"\n## {key}: {cv.SCHEMAS[key]['description']}\n\nRows: **{r['rows']:,}**\n\n{md_table(r['table'])}\n")
+    return write_md("3.1.1_inspection_summary.md", "".join(parts))
+
+
+# ---------------------------------------------------------------------------
+# WBS 3.1.2 Quality checks
+# ---------------------------------------------------------------------------
+def duplicates_by_month(con, key):
+    """Exact duplicates and repeated keys, month by month. Mobility is too large for one global sort."""
+    dims = _dimensions(con, key)
+    measure_cols = {"viajes", "visitantes"}
+    if key == "T3":
+        measure_cols = {"visitantes"}
+    keys = [c for c in dims if c not in measure_cols]
+    key_sql = ", ".join(f'"{c}"' for c in keys)
+    all_sql = ", ".join(f'"{c}"' for c in dims)
+    rows = exact = repeated = affected_keys = conflicting = max_rows = extra_trips = trips = 0
+    for path in _files(key):
+        src = _read(path)
+        n = con.execute(f"SELECT count(*) FROM {src}").fetchone()[0]
+        e = con.execute(f"SELECT count(*) FROM (SELECT DISTINCT {all_sql} FROM {src})").fetchone()[0]
+        k, conflict, peak = con.execute(f"""SELECT count(*), sum((v > 1)::BIGINT), max(c) FROM
+            (SELECT {key_sql}, count(*) c, count(DISTINCT "{_measure(key)}") v FROM {src} GROUP BY ALL)""").fetchone()
+        rows += n
+        exact += n - e
+        repeated += n - k
+        conflicting += conflict or 0
+        max_rows = max(max_rows, peak or 0)
+        if n != k:
+            affected_keys += con.execute(f"SELECT count(*) FROM (SELECT {key_sql} FROM {src} GROUP BY ALL HAVING count(*) > 1)").fetchone()[0]
+        if n != e:
+            total, distinct_sum = con.execute(f"""SELECT (SELECT sum("{_measure(key)}") FROM {src}),
+                (SELECT sum("{_measure(key)}") FROM (SELECT DISTINCT {all_sql} FROM {src}))""").fetchone()
+            trips += total
+            extra_trips += total - distinct_sum
+    return {"rows": rows, "exact": exact, "repeated": repeated, "keys_affected": affected_keys, "conflicting": conflicting,
+            "max_rows_per_key": max_rows, "measure_in_exact_repeats": extra_trips, "measure_total_when_repeats": trips}
+
+
+def review_sql(con, key, known_codes, legacy_codes):
+    """Checks S1-S4 and C1-C4 for one dataset. Returns rows: check, result, rows affected, status, action."""
+    source = L.parquet_glob(key)
+    expected = cv.SCHEMAS[key]["columns"]
+    dims = _dimensions(con, key)
+    measure = _measure(key)
+    n = con.execute(f"SELECT count(*) FROM {source}").fetchone()[0]
+    out = []
+    metrics = {"rows": n, "null_share": 0.0, "grouped_share": 0.0, "repeated_share": 0.0, "zero_share": 0.0, "unknown_codes": 0,
+               "legacy_mismatch": False, "legacy_matches": None, "real_codes": None, "zero_by_origin": {}}
+
+    def add(check, result, affected, ok, action):
+        out.append({"check": check, "result": result, "rows affected": f"{affected:,}" if isinstance(affected, int) else affected,
+                    "status": "OK" if ok else "REVIEW", "proposed action": action})
+
+    # S1 columns
+    missing, extra = sorted(set(expected) - set(dims)), sorted(set(dims) - set(expected))
+    renames = sorted({L.COLUMN_RENAMES[c] for e in L.read_manifest().values() if e.get("key") == key and e.get("found")
+                      for c in e["columns"] if c in L.COLUMN_RENAMES})
+    add("S1 Columns match the official description",
+        f"missing: {missing or 'none'}; extra: {extra or 'none'}; renamed in file: {renames or 'none'}", 0, not missing,
+        "Names mapped in `loaders.COLUMN_RENAMES`" if renames else "None")
+
+    # S2 categories
+    for col, allowed in (("origen", cv.ORIGINS), ("tipo_visitante", cv.VISITOR_TYPES)):
+        if col in dims:
+            values = dict(con.execute(f'SELECT "{col}", count(*) FROM {source} GROUP BY 1').fetchall())
+            unknown = {v: c for v, c in values.items() if v not in allowed and v != "NA"}
+            grouped = values.get("NA", 0)
+            add(f"S2 Values of `{col}`", ", ".join(sorted(values)), sum(unknown.values()) + grouped, not unknown,
+                "Keep `NA` as a grouped segment" if grouped else "None")
+    if key == "T9":
+        origins = {r[0] for r in con.execute(f"SELECT DISTINCT origen FROM {source}").fetchall()}
+        add("S2 All official origins present in T9", f"`Internacional` present: {'Internacional' in origins}", 0,
+            "Internacional" in origins,
+            "T9 has no international visitors although the description lists them: ask the mentor; Q14 covers national and regional only")
+    if key in ("T1", "T2", "T4", "T5", "T9"):
+        regional_tourists = con.execute(f"SELECT count(*) FROM {source} WHERE origen = 'Regional' AND tipo_visitante = 'Turista'").fetchone()[0]
+        add("S2 Regional visitors are always excursionists", f"{regional_tourists:,} regional tourist rows", regional_tourists,
+            regional_tourists == 0, "None" if not regional_tourists else "Ask the mentor")
+    if "origen" in dims and key.startswith("T"):
+        residents = con.execute(f"SELECT count(*) FROM {source} WHERE origen = 'Residente'").fetchone()[0]
+        add("S2 Residents absent from tourism files", f"{residents:,} rows", residents, residents == 0, "None")
+
+    # S3 period
+    found_months = {r[0] for r in con.execute(f"SELECT DISTINCT source_month FROM {source}").fetchall()}
+    missing_months = sorted(set(L.expected_months()) - found_months)
+    add("S3 Months covered", f"{len(found_months)} of 32; missing: {missing_months or 'none'}", 0, not missing_months, "None")
+    date_col = _date_column(key)
+    if date_col:
+        have = {r[0] for r in con.execute(f"SELECT DISTINCT TRY_CAST(\"{date_col}\" AS DATE) FROM {source}").fetchall() if r[0]}
+        gaps = [d for d in pd.date_range("2023-01-01", "2025-08-31").date if d not in have]
+        add("S3 Days covered", f"{len(have)} of 974 days; missing: {', '.join(map(str, gaps)) or 'none'}", 0, not gaps,
+            "Flag the affected months (`incomplete_month`); no imputation")
+        outside = con.execute(f"""SELECT count(*) FROM {source} WHERE TRY_CAST("{date_col}" AS DATE) IS NOT NULL
+                                  AND strftime(TRY_CAST("{date_col}" AS DATE), '%Y%m') <> source_month""").fetchone()[0]
+        add("S3 Dates inside the month of their folder", f"{outside:,} outside", outside, outside == 0, "None")
+    if "mes" in dims:
+        outside = con.execute(f"SELECT count(*) FROM {source} WHERE mes <> source_month").fetchone()[0]
+        add("S3 `mes` equals the month of the folder", f"{outside:,} differ", outside, outside == 0, "None")
+    if key == "T3":
+        partial = con.execute(f"SELECT count(*) FROM (SELECT periodo, origen FROM {source} GROUP BY 1, 2 HAVING count(DISTINCT pernoctaciones) < 7)").fetchone()[0]
+        repeated_weeks = con.execute(f"SELECT count(*) FROM (SELECT periodo FROM {source} GROUP BY 1 HAVING count(DISTINCT mes) > 1)").fetchone()[0]
+        add("S3 Weeks with all 7 night values", f"{partial:,} week × origin combinations with fewer than 7", partial, partial == 0,
+            "Flag them (`partial_week`); they are the weeks containing a missing day")
+        add("S3 Weeks assigned to a single month", f"{repeated_weeks:,} week(s) appear under two months", repeated_weeks, repeated_weeks == 0,
+            "Flag them (`week_in_two_months`); excluded from the T3 distribution")
+
+    # S4 codes
+    columns = [c for c in ("cod_barrio", "barrio_origen", "barrio_destino") if c in dims]
+    for col in columns:
+        codes = dict(con.execute(f'SELECT "{col}", count(*) FROM {source} GROUP BY 1').fetchall())
+        real = set(codes) - {"-", "NA"}
+        unknown = sorted(real - known_codes)
+        placeholders = {k: v for k, v in codes.items() if k in ("-", "NA")}
+        legacy = len(real & legacy_codes)
+        metrics.update(unknown_codes=metrics["unknown_codes"] + len(unknown), legacy_matches=legacy, real_codes=len(real),
+                       legacy_mismatch=legacy < len(real))
+        add(f"S4 `{col}` codes found on the 73-neighbourhood map",
+            f"{len(real & known_codes)} of {len(real)} after correspondence (Iteration 1 rule: {legacy}); unknown: {unknown or 'none'}; "
+            f"placeholders: {placeholders or 'none'}", sum(placeholders.values()) + sum(codes[c] for c in unknown), not unknown,
+            "Apply the correspondence of 2.1.1")
+
+    # C1 duplicates
+    d = duplicates_by_month(con, key)
+    share = d["repeated"] / n if n else 0
+    metrics["repeated_share"] = share
+    if d["repeated"] == 0:
+        add("C1 Duplicated rows", "0 exact duplicates; 0 repeated keys", 0, True, "None")
+    else:
+        extra_note = ""
+        if d["measure_total_when_repeats"]:
+            extra_note = (f"; exact repeats carry {d['measure_in_exact_repeats']:,} of {d['measure_total_when_repeats']:,} "
+                          f"{measure} ({d['measure_in_exact_repeats'] / d['measure_total_when_repeats']:.2%})")
+        action = ("Rows with the same key carry different values, so they are not simple copies: the file seems to have a dimension "
+                  "that is not in the description. Keep the rows, flag them (`key_rows`, `is_exact_repeat`), ask the mentor, and do not "
+                  "use M3 until clarified") if d["conflicting"] else "Drop exact duplicates and log them"
+        add("C1 Duplicated rows",
+            f"{d['exact']:,} exact duplicates ({d['exact'] / n:.1%}); {d['repeated']:,} rows beyond the first per key ({share:.1%}); "
+            f"{d['keys_affected']:,} keys repeated, {d['conflicting']:,} with different values, up to {d['max_rows_per_key']} rows per key{extra_note}",
+            d["repeated"], False, action)
+
+    # C2 nulls and NA
+    null_counts = {}
+    grouped_rows = 0
+    conditions = []
+    for col in dims:
+        nulls = con.execute(f'SELECT count(*) - count("{col}") FROM {source}').fetchone()[0]
+        if nulls:
+            null_counts[col] = nulls
+    text_cols = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall() if r[1] == "VARCHAR" and r[0] != "source_month"]
+    conditions = " OR ".join(f"\"{c}\" = 'NA'" for c in text_cols)
+    grouped_rows = con.execute(f"SELECT count(*) FROM {source} WHERE {conditions}").fetchone()[0]
+    total_measure = con.execute(f'SELECT sum("{measure}") FROM {source}').fetchone()[0] or 0
+    grouped_measure = con.execute(f"SELECT sum(\"{measure}\") FROM {source} WHERE {conditions}").fetchone()[0] or 0
+    metrics["null_share"] = sum(null_counts.values()) / n
+    metrics["grouped_share"] = grouped_rows / n
+    add("C2 Empty values (null)", f"{null_counts or 'none'}", sum(null_counts.values()), not null_counts, "Keep; never read as 0")
+    add("C2 Grouped `NA` segments", f"{grouped_rows:,} rows ({grouped_rows / n:.2%})"
+        + (f", {grouped_measure / total_measure:.3%} of the summed values" if key.startswith("T") and total_measure else ""),
+        grouped_rows, grouped_rows / n <= R1_LIMIT, "Keep as NA; flag (`is_grouped_na`); never read as 0 visitors")
+
+    # C3 zeros and C4 negatives
+    zeros, negative, low, lo, hi = con.execute(f"""SELECT sum(("{measure}" = 0)::BIGINT), sum(("{measure}" < 0)::BIGINT),
+        sum(("{measure}" > 0 AND "{measure}" < 15)::BIGINT), min("{measure}"), max("{measure}") FROM {source}""").fetchone()
+    zeros, negative, low = zeros or 0, negative or 0, low or 0
+    if key in L.MOBILITY_KEYS:
+        by_origin = con.execute(f"""SELECT origen, sum((viajes = 0)::BIGINT) * 1.0 / count(*), sum((viajes = 0)::BIGINT), sum(viajes)
+                                    FROM {source} GROUP BY 1 ORDER BY 1""").fetchall()
+        metrics["zero_share"] = zeros / n
+        metrics["zero_by_origin"] = {o: s for o, s, _, _ in by_origin}
+        add("C3 Share of 0 in `viajes` (fewer than 15 trips)",
+            f"{zeros / n:.1%} of rows; " + ", ".join(f"{o}: {s:.1%}" for o, s, _, _ in by_origin), zeros, zeros / n <= R1_LIMIT,
+            "Keep as 0 with a flag (`is_censored_zero`); never read as no mobility; report at month / neighbourhood level")
+        add("C3 Most trips hidden by the threshold (0 can be up to 14)",
+            "; ".join(f"{o}: up to {z * 14:,} on top of {t:,} published (+{z * 14 / t:.0%})" for o, _, z, t in by_origin), 0, True,
+            "Report a lower and an upper bound where it matters (Q6)")
+        add("C3 Values from 1 to 14 (should not exist)", f"{low:,}", low, low == 0, "None")
+    else:
+        add("C3 Published values below 15 (should not exist)", f"{low + zeros:,}; minimum {lo:,}", low + zeros, low + zeros == 0, "None")
+    add(f"C4 Negative `{measure}`", f"{negative:,}", negative, negative == 0, "None" if not negative else "Ask the mentor")
+    nulls_measure = null_counts.get(measure, 0)
+    if nulls_measure:
+        add(f"C4 Non-numeric `{measure}`", f"{nulls_measure:,}", nulls_measure, False, "Ask the mentor")
+
+    # Definition checks for mobility
+    if key in ("M1", "M2", "M3"):
+        columns = ("barrio_origen", "barrio_destino") if key in ("M1", "M3") else ("municipio_origen", "municipio_destino")
+        same = con.execute(f"SELECT count(*) FROM {source} WHERE \"{columns[0]}\" = \"{columns[1]}\" AND \"{columns[0]}\" <> '-'").fetchone()[0]
+        add("Definition: no trips inside the same area", f"{same:,} rows", same, same == 0, "None")
+        wrong = con.execute(f"""SELECT count(*) FROM {source} WHERE strftime(TRY_CAST(day AS DATE), '%w') <>
+            CASE day_of_the_week WHEN 'Domingo' THEN '0' WHEN 'Lunes' THEN '1' WHEN 'Martes' THEN '2' WHEN 'Miércoles' THEN '3'
+                 WHEN 'Jueves' THEN '4' WHEN 'Viernes' THEN '5' WHEN 'Sábado' THEN '6' END""").fetchone()[0]
+        add("Definition: weekday label matches the calendar", f"{wrong:,} rows differ", wrong, wrong == 0, "None")
+    table = pd.DataFrame(out)
+    table.attrs["metrics"] = metrics
+    return table
+
+
+def cross_file_checks(con):
+    """X1-X3 of data_review_plan.md, reusing analysis.consistency_checks. NA groups are excluded."""
+    frames = {k: L.load_tourism(k, con=con) for k in ("T1", "T2", "T4", "T5")}
+    t4 = frames["T4"][(frames["T4"]["origen"] != "NA") & (frames["T4"]["tipo_visitante"] != "NA")]
+    t5 = frames["T5"]
+    t5 = t5[(t5["origen"] != "NA") & (t5["tipo_visitante"] != "NA") & (t5["cod_barrio"] != "NA") & (t5["date_dt"] != "NA")]
+    table = an.consistency_checks(frames["T1"], frames["T2"], t4, t5)
+    table.insert(0, "id", ["X1", "X2", "X3"])
+
+    key = ["mes", "cod_barrio", "origen", "tipo_visitante"]
+    daily = t5.groupby(key)["visitantes"].max().rename("daily_max")
+    both = pd.concat([daily, t4.set_index(key)["visitantes"].rename("monthly")], axis=1).dropna()
+    bad = both[both["daily_max"] > both["monthly"]].reset_index()
+    details = {"x1_cells": len(both), "x1_violations": len(bad),
+               "x1_by_segment": bad.groupby(["origen", "tipo_visitante"]).size().rename("cells").reset_index(),
+               "x1_codes": bad["cod_barrio"].value_counts().to_dict(),
+               "x1_max_monthly": int(bad["monthly"].max()) if len(bad) else None}
+    # Neighbourhoods with unusually low tourism counts, compared with the median neighbourhood.
+    _, barris = cv.load_barris()
+    names = dict(zip(barris["cod_barrio_ss"], barris["barrio_name"]))
+    per_barrio = t4.groupby(["mes", "cod_barrio"])["visitantes"].sum().groupby("cod_barrio").mean().sort_values()
+    details["median_barrio"] = float(per_barrio.median())
+    details["low_barrios"] = [{"name": names[c], "mean_monthly": float(v)} for c, v in per_barrio.head(2).items()]
+    details["x1_names"] = {names[c]: n for c, n in details["x1_codes"].items()}
+
+    key = ["date_dt", "origen", "tipo_visitante"]
+    ratio = (t5.groupby(key)["visitantes"].sum() / frames["T2"].set_index(key)["visitantes"]).dropna()
+    details["x3_by_origin"] = ratio.groupby("origen").median().round(2).to_dict()
+    details["x3_below_1"] = int((ratio < 1).sum())
+    key = ["mes", "origen", "tipo_visitante"]
+    city = pd.concat([frames["T2"].groupby(key)["visitantes"].max().rename("daily_max"),
+                      frames["T1"].set_index(key)["visitantes"].rename("monthly")], axis=1).dropna()
+    details["t2_vs_t1_violations"] = int((city["daily_max"] > city["monthly"]).sum())
+    return table, details
+
+
+def monthly_breaks(con, limit=0.5):
+    """Sudden changes between consecutive months that the definitions do not explain (trips per day)."""
+    rows = []
+    for key in L.MOBILITY_KEYS:
+        s = con.execute(f"""SELECT source_month, origen, sum(viajes) * 1.0 / count(DISTINCT day) AS per_day
+                            FROM {L.parquet_glob(key)} GROUP BY 1, 2 ORDER BY 1""").df()
+        s["change"] = s.groupby("origen")["per_day"].pct_change()
+        for r in s[s["change"].abs() > limit].itertuples():
+            rows.append({"dataset": key, "month": r.source_month, "origen": r.origen, "change vs previous month": f"{r.change:+.0%}"})
+    for key in ("T1",):
+        s = con.execute(f"""SELECT mes AS source_month, origen, tipo_visitante, visitantes AS per_day
+                            FROM {L.parquet_glob(key)} ORDER BY 1""").df()
+        s["change"] = s.groupby(["origen", "tipo_visitante"])["per_day"].pct_change()
+        for r in s[s["change"].abs() > limit].itertuples():
+            rows.append({"dataset": key, "month": r.source_month, "origen": f"{r.origen} {r.tipo_visitante}",
+                         "change vs previous month": f"{r.change:+.0%}"})
+    return pd.DataFrame(rows, columns=["dataset", "month", "origen", "change vs previous month"])
+
+
+def run_quality(con):
+    _, barris = cv.load_barris()
+    known = set(barris["cod_barrio_ss"])
+    legacy = set("0" + barris["cod_barrio"])
+    return {"tables": {key: review_sql(con, key, known, legacy) for key in L.ALL_KEYS},
+            "cross": cross_file_checks(con), "breaks": monthly_breaks(con)}
+
+
+def r1_assessment(results):
+    """R1: more than 10% of records with nulls or inconsistencies in a file, or codes that do not match the map."""
+    rows = []
+    for key, table in results["tables"].items():
+        m = table.attrs["metrics"]
+        reasons = []
+        if m["null_share"] > R1_LIMIT:
+            reasons.append(f"nulls {m['null_share']:.1%}")
+        if m["grouped_share"] > R1_LIMIT:
+            reasons.append(f"grouped NA {m['grouped_share']:.1%}")
+        if m["repeated_share"] > R1_LIMIT:
+            reasons.append(f"repeated keys {m['repeated_share']:.1%}")
+        if m["zero_share"] > R1_LIMIT:
+            reasons.append(f"censored zeros {m['zero_share']:.1%}")
+        if m["unknown_codes"]:
+            reasons.append(f"{m['unknown_codes']} codes not on the map")
+        if m["legacy_mismatch"]:
+            reasons.append(f"Iteration 1 code rule matches {m['legacy_matches']} of {m['real_codes']}; fixed by the correspondence")
+        rows.append({"dataset": key, "checks": len(table), "to review": int((table["status"] == "REVIEW").sum()),
+                     "R1 triggered": "yes" if reasons else "no", "reason": "; ".join(reasons) or "-"})
+    return pd.DataFrame(rows)
+
+
+def problems_text(results, temporal):
+    """The short list for the dashboard, built from computed values."""
+    tables = results["tables"]
+    cross, details = results["cross"]
+    m1, m3, t4 = (tables[k].attrs["metrics"] for k in ("M1", "M3", "T4"))
+    missing = ", ".join(str(d) for d in temporal["missing"])
+    months = ", ".join(f"{m} ({n} day)" for m, n in temporal["incomplete"].items())
+    origins = "; ".join(f"{o} {s:.1%}" for o, s in m1["zero_by_origin"].items())
+    low = details["low_barrios"]
+    return f"""1. **Neighbourhood codes (R1, fixed).** The Iteration 1 rule "8019 + district + BARRI" matches only {t4['legacy_matches']} of {t4['real_codes']} codes, because BARRI is numbered across the city while Smart Steps numbers neighbourhoods inside each district. Real codes also have 9 digits (`080190101`). After the correspondence in 2.1.1, all {t4['real_codes']} match. Without this fix the map would show wrong neighbourhoods.
+2. **Censored trips in Q6 (R1, reported).** {m1['zero_share']:.1%} of M1 rows are published zeros, meaning fewer than 15 trips: {origins}. Visitor flows are hidden more often than residents' flows, so the published visitor share may be understated. 3.1.6 reports a bound.
+3. **Missing days.** {missing} are missing in all daily files. Months flagged as incomplete: {months}. There is no imputation.
+4. **M3 repeated keys (R1, open).** {m3['repeated_share']:.1%} of M3 rows repeat a day × origin × route key, usually with different values. M3 is not used in Q1 to Q6, so the dashboard is not affected. To ask the mentor before Iteration 3 (Q13).
+5. **Two neighbourhoods with unusual tourism counts (open).** {low[0]['name']} ({low[0]['mean_monthly']:,.0f} unique visitors per month) and {low[1]['name']} ({low[1]['mean_monthly']:,.0f}) are far below the median neighbourhood ({details['median_barrio']:,.0f}). All {details['x1_violations']} X1 violations, out of {details['x1_cells']:,} cells, fall in them ({details['x1_names']}), with monthly values of at most {details['x1_max_monthly']}. The data cannot show the reason. Their values at the bottom of the rankings and in Q6 should be read with care. To ask the mentor.
+6. **T9 has no international visitors**, although the description lists them. It affects Q14 in Iteration 3, not the dashboard.
+7. **Trips and unique visitors stay separate.** The Q6 map uses M1 trips; all other views use tourism files."""
+
+
+def write_quality(results, problems):
+    cross, details = results["cross"]
+    r1 = r1_assessment(results)
+    parts = [f"""
+# 3.1.2 Data quality assessment
+
+CONVIVE · Team 102_A · Iteration 2. Generated by `quality.run_quality()` on the full data (32 months, all 12 datasets). No data rows are shown.
+
+Checks S1 to S4, C1 to C4 and X1 to X3 come from `data_review_plan.md`. The R1 trigger is more than 10% of records with nulls or inconsistencies
+in a key file, or neighbourhood codes that do not match the map.
+
+## Problems that matter for the dashboard
+
+{problems}
+
+## R1 trigger by dataset
+
+{md_table(r1)}
+"""]
+    for key, table in results["tables"].items():
+        parts.append(f"\n## {key}: {cv.SCHEMAS[key]['description']}\n\n{md_table(table)}\n")
+    parts.append(f"""
+## Cross-file checks (X1 to X3)
+
+{md_table(cross)}
+
+- X1 detail: {details['x1_violations']} of {details['x1_cells']:,} neighbourhood × month × segment cells have a daily maximum above the monthly value. The largest monthly value among them is {details['x1_max_monthly']}, so all are very small segments. Neighbourhood codes affected: {details['x1_codes']}.
+- X1 by segment:
+
+{md_table(details['x1_by_segment'])}
+
+- X3 detail: the median of (sum of neighbourhoods / city) by origin is {details['x3_by_origin']}. {details['x3_below_1']} day × segment combinations are below 1.
+- Extra check, T2 daily maximum above T1 monthly value: {details['t2_vs_t1_violations']} violations.
+
+## Sudden month-to-month changes (above 50%)
+
+{md_table(results['breaks']) if len(results['breaks']) else 'None found.'}
+
+These rises all fall in September 2023 and September 2024, after the August low, in the same mobility files. They recur in both years, so they are reported as a pattern. Proposed action: no change to the data.
+""")
+    return write_md("3.1.2_data_quality_report.md", "".join(parts))

@@ -20,7 +20,9 @@ import pandas as pd
 HERE = Path(__file__).parent
 RAW_DIR = HERE / "data" / "raw"          # put the real Telefónica files here (never commit them)
 SAMPLE_DIR = HERE / "data" / "sample"    # synthetic files are written here
-GEO_FILE = HERE / "data" / "geo" / "barris_bcn.geojson"
+GEO_CANDIDATES = [HERE / "data" / "geo" / "barris_bcn.geojson",
+                  HERE / "data" / "Synthetic" / "geo" / "barris_bcn.geojson"]
+GEO_FILE = next((p for p in GEO_CANDIDATES if p.exists()), GEO_CANDIDATES[0])
 OUT_DIR = HERE / "outputs"
 
 BCN_MUNICIPIO = "08019"
@@ -29,15 +31,20 @@ ORIGINS = ["Internacional", "Nacional", "Regional", "Residente"]
 VISITOR_ORIGINS = ["Internacional", "Nacional", "Regional"]  # tourism files have no residents
 VISITOR_TYPES = ["Turista", "Excursionista"]
 WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+# District names are not in the GeoJSON: official list of the Ajuntament de Barcelona, keyed by DISTRICTE.
+DISTRICT_NAMES = {"01": "Ciutat Vella", "02": "Eixample", "03": "Sants-Montjuïc", "04": "Les Corts",
+                  "05": "Sarrià-Sant Gervasi", "06": "Gràcia", "07": "Horta-Guinardó", "08": "Nou Barris",
+                  "09": "Sant Andreu", "10": "Sant Martí"}
 
 # ---------------------------------------------------------------------------
 # Data catalogue, taken from "Smart Steps - Challenge 2026" (Telefónica Tech).
-# File names for mobility (M1-M3) are not given in the document: TBC when the
-# data arrives.
+# Column names follow the official description; loaders.COLUMN_RENAMES maps the
+# few names that differ in the real files. Mobility file names are the real ones:
+# <file>_YYYY-MM_origen.csv in one folder per month.
 # ---------------------------------------------------------------------------
 SCHEMAS = {
     "M1": {
-        "file": "movilidad_barrios",  # TBC
+        "file": "movilidad_barrios",
         "description": "Trips between Barcelona neighbourhoods, per day",
         "columns": ["day", "day_of_the_week", "month", "origen",
                     "municipio_origen", "municipio_origen_name", "barrio_origen", "barrio_origen_name",
@@ -45,14 +52,14 @@ SCHEMAS = {
                     "viajes"],
     },
     "M2": {
-        "file": "movilidad_municipios",  # TBC
+        "file": "movilidad_municipios",
         "description": "Trips between municipalities of the province, per day",
         "columns": ["day", "day_of_the_week", "month", "origen",
                     "municipio_origen", "municipio_origen_name",
                     "municipio_destino", "municipio_destino_name", "viajes"],
     },
     "M3": {
-        "file": "movilidad_barrios_municipios",  # TBC
+        "file": "movilidad_mun_barrios",
         "description": "Trips between Barcelona neighbourhoods and municipalities, per day",
         "columns": ["day", "day_of_the_week", "month", "origen",
                     "municipio_origen", "municipio_origen_name", "barrio_origen", "barrio_origen_name",
@@ -130,18 +137,32 @@ def catalogue():
 def load_barris():
     """73 Barcelona neighbourhoods (Open Data BCN, CC BY 4.0).
 
-    The Smart Steps code is assumed to be "8019" + district (2 digits) +
-    neighbourhood (2 digits), e.g. el Raval = 80190101, la Barceloneta = 80190103,
-    which matches both examples in the data description. To be checked with the
-    real data (check_barrio_codes).
+    Two codes per neighbourhood:
+      cod_barrio     "8019" + DISTRICTE + BARRI, the Iteration 1 assumption. Used by the synthetic data.
+                     BARRI is numbered across the whole city (01 to 73), so this form matches the real
+                     data only in district 01.
+      cod_barrio_ss  the real Smart Steps code: "08019" + DISTRICTE + position of the neighbourhood inside
+                     its district (el Bon Pastor = 080190903). Verified against the names in M1 (WBS 2.1.1).
     """
     geo = json.loads(GEO_FILE.read_text(encoding="utf-8"))
-    for f in geo["features"]:
+    order = sorted(geo["features"], key=lambda f: (f["properties"]["DISTRICTE"], f["properties"]["BARRI"]))
+    position = {}
+    for f in order:
         p = f["properties"]
+        position[p["DISTRICTE"]] = position.get(p["DISTRICTE"], 0) + 1
         p["cod_barrio"] = "8019" + p["DISTRICTE"] + p["BARRI"]
+        p["cod_barrio_ss"] = "08019" + p["DISTRICTE"] + f"{position[p['DISTRICTE']]:02d}"
+        p["distrito_name"] = DISTRICT_NAMES.get(p["DISTRICTE"], "")
     table = pd.DataFrame([f["properties"] for f in geo["features"]])
     table = table.rename(columns={"NOM": "barrio_name", "DISTRICTE": "distrito"})
-    return geo, table[["cod_barrio", "barrio_name", "distrito"]].sort_values("cod_barrio").reset_index(drop=True)
+    columns = ["cod_barrio", "barrio_name", "distrito", "cod_barrio_ss", "distrito_name"]
+    return geo, table[columns].sort_values("cod_barrio").reset_index(drop=True)
+
+
+def map_center(geo):
+    """Centre of the neighbourhoods' bounding box, for the Plotly map view."""
+    points = np.array([point for f in geo["features"] for ring in _rings(f["geometry"]) for point in ring])
+    return {"lon": float((points[:, 0].min() + points[:, 0].max()) / 2), "lat": float((points[:, 1].min() + points[:, 1].max()) / 2)}
 
 
 def _rings(geometry):
@@ -237,14 +258,27 @@ def _find(folder, name):
     return None
 
 
-def load(key, mode="auto"):
+def load(key, mode="auto", months=None, stage="raw"):
     """Load one file by its id (M1..T9).
 
-    mode="auto": use the real file in data/raw/ if it exists, otherwise the synthetic one.
+    mode="real":      real monthly files through loaders.py (Parquet). `months` limits the months and
+                      `stage` picks 'raw' or 'clean'. M2 and M3 need `months`: the full period does not fit in
+                      pandas (use loaders.load_mobility(key, lazy=True) for those).
+    mode="synthetic": synthetic file in data/sample/ (Iteration 1 behaviour).
+    mode="auto":      a single file in data/raw/ if it exists, otherwise the synthetic one (Iteration 1 behaviour).
     Returns (dataframe, source) or (None, "missing").
     """
+    if mode == "real":
+        import loaders
+        if key in ("M2", "M3") and months is None:
+            raise ValueError(f"{key} is too large for pandas: pass months=[...] or use loaders.load_mobility('{key}', lazy=True)")
+        reader = loaders.load_mobility if key in loaders.MOBILITY_KEYS else loaders.load_tourism
+        try:
+            return reader(key, months=months, stage=stage), "real"
+        except FileNotFoundError:
+            return None, "missing"
     name = SCHEMAS[key]["file"]
-    path = _find(RAW_DIR, name) if mode in ("auto", "real") else None
+    path = _find(RAW_DIR, name) if mode == "auto" else None
     source = "real"
     if path is None and mode in ("auto", "synthetic"):
         path, source = _find(SAMPLE_DIR, name), "synthetic"
@@ -271,16 +305,21 @@ def review(df, key, barris=None):
     expected = SCHEMAS[key]["columns"]
     out = []
     missing = [c for c in expected if c not in df.columns]
-    extra = [c for c in df.columns if c not in expected]
+    extra = [c for c in df.columns if c not in expected and c != "source_month"]
     out.append(("Columns match the official description", f"missing={missing or '-'}, extra={extra or '-'}",
                 not missing))
     out.append(("Rows", f"{len(df):,}", len(df) > 0))
-    dup = int(df.duplicated().sum())
+    dup = int(df.drop(columns="source_month", errors="ignore").duplicated().sum())
     out.append(("Duplicated rows", f"{dup:,}", dup == 0))
     nulls = df.drop(columns=[measure_col for measure_col in ("viajes", "visitantes") if measure_col in df.columns]).isna().sum()
     nulls = nulls[nulls > 0]
     out.append(("Empty values in other columns",
                 ", ".join(f"{c}: {n:,}" for c, n in nulls.items()) or "none", True))
+    grouped = {c: int((df[c] == "NA").sum()) for c in df.columns
+               if not pd.api.types.is_numeric_dtype(df[c]) and (df[c] == "NA").any()}
+    if grouped:
+        out.append(("Grouped 'NA' values (segments < 15 people, kept as NA)",
+                    ", ".join(f"{c}: {n:,}" for c, n in grouped.items()), True))
     measure = "viajes" if "viajes" in df.columns else "visitantes"
     if measure in df.columns and df[measure].isna().any():
         out.append((f"Share of {measure} = NA (anonymised, < 15 people)", f"{df[measure].isna().mean():.1%}", True))
@@ -291,12 +330,12 @@ def review(df, key, barris=None):
         out.append((f"Negative {measure}", f"{neg}", neg == 0))
     if "origen" in df.columns:
         values = sorted(df["origen"].dropna().unique())
-        unknown = [v for v in values if v not in ORIGINS]
+        unknown = [v for v in values if v not in ORIGINS + ["NA"]]
         out.append(("Values of 'origen'", ", ".join(values), not unknown))
     if "tipo_visitante" in df.columns:
         values = sorted(df["tipo_visitante"].dropna().unique())
         out.append(("Values of 'tipo_visitante'", ", ".join(values),
-                    all(v in VISITOR_TYPES for v in values)))
+                    all(v in VISITOR_TYPES + ["NA"] for v in values)))
     if "mes" in df.columns:
         months = sorted(df["mes"].astype(str).unique())
         expected_n = len(_months())
@@ -304,9 +343,9 @@ def review(df, key, barris=None):
                     len(months) == expected_n))
     for col in ("date_dt", "day"):
         if col in df.columns:
-            days = pd.to_datetime(df[col])
-            full = pd.date_range(days.min(), days.max()) if col == "date_dt" else None
-            gaps = [] if full is None else full.difference(days.unique())
+            days = pd.to_datetime(df[col], errors="coerce").dropna()   # "NA" = grouped segment, not a day
+            full = pd.date_range(days.min(), days.max())
+            gaps = full.difference(days.unique())
             out.append(("Days covered", f"{days.min():%Y-%m-%d} to {days.max():%Y-%m-%d}, {days.nunique()} days, "
                         f"missing: {', '.join(f'{d:%Y-%m-%d}' for d in gaps) or 'none'}", len(gaps) == 0))
     if barris is not None:
@@ -317,10 +356,12 @@ def review(df, key, barris=None):
 def check_barrio_codes(df, barris):
     """Do the neighbourhood codes in the data match the 73 neighbourhoods of the map?"""
     known = set(barris["cod_barrio"])
+    if "cod_barrio_ss" in barris.columns:
+        known |= set(barris["cod_barrio_ss"])
     out = []
     for col in ("cod_barrio", "barrio_origen", "barrio_destino"):
         if col in df.columns:
-            codes = set(df[col].dropna().astype(str)) - {"-"}
+            codes = set(df[col].dropna().astype(str)) - {"-", "NA"}
             unknown = sorted(codes - known)
             out.append((f"'{col}' codes found on the map", f"{len(codes & known)} of {len(codes)} "
                         f"(unknown: {unknown[:5] or '-'})", not unknown))

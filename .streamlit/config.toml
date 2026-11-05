@@ -1,0 +1,13 @@
+# Local only: no Deploy button, no usage statistics, reachable only from this computer.
+[server]
+address = "localhost"
+headless = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+primaryColor = "#1F3A5F"
