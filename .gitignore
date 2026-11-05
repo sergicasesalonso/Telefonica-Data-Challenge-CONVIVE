@@ -6,3 +6,8 @@ data/sample/
 __pycache__/
 .ipynb_checkpoints/
 docs/
+# Iteration 2: outputs built from NDA data. Regenerate them; decide deliberately before sharing
+deliverables/iteration2/3.1.6_stats/*.csv
+deliverables/iteration2/3.1.6_summary.json
+deliverables/iteration2/*.html
+deliverables/iteration2/screenshots/

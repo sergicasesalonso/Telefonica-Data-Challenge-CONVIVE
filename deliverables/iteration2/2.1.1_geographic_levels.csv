@@ -1,0 +1,85 @@
+level,code_smart_steps,code_map_iteration1,code_district,name,district_name,parent_code,in_M1,in_M3,in_T4,in_T5,match_method
+municipality,08019,,,Barcelona,,08 (province),True,True,True,True,direct
+district,0801901,,01,Ciutat Vella,Ciutat Vella,08019,True,True,True,True,first 2 digits after 08019
+district,0801902,,02,Eixample,Eixample,08019,True,True,True,True,first 2 digits after 08019
+district,0801903,,03,Sants-Montjuïc,Sants-Montjuïc,08019,True,True,True,True,first 2 digits after 08019
+district,0801904,,04,Les Corts,Les Corts,08019,True,True,True,True,first 2 digits after 08019
+district,0801905,,05,Sarrià-Sant Gervasi,Sarrià-Sant Gervasi,08019,True,True,True,True,first 2 digits after 08019
+district,0801906,,06,Gràcia,Gràcia,08019,True,True,True,True,first 2 digits after 08019
+district,0801907,,07,Horta-Guinardó,Horta-Guinardó,08019,True,True,True,True,first 2 digits after 08019
+district,0801908,,08,Nou Barris,Nou Barris,08019,True,True,True,True,first 2 digits after 08019
+district,0801909,,09,Sant Andreu,Sant Andreu,08019,True,True,True,True,first 2 digits after 08019
+district,0801910,,10,Sant Martí,Sant Martí,08019,True,True,True,True,first 2 digits after 08019
+neighbourhood,080190101,80190101,01,el Raval,Ciutat Vella,0801901,True,True,True,True,name and district + position rule
+neighbourhood,080190102,80190102,01,el Barri Gòtic,Ciutat Vella,0801901,True,True,True,True,name and district + position rule
+neighbourhood,080190103,80190103,01,la Barceloneta,Ciutat Vella,0801901,True,True,True,True,name and district + position rule
+neighbourhood,080190104,80190104,01,"Sant Pere, Santa Caterina i la Ribera",Ciutat Vella,0801901,True,True,True,True,name and district + position rule
+neighbourhood,080190201,80190205,02,el Fort Pienc,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190202,80190206,02,la Sagrada Família,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190203,80190207,02,la Dreta de l'Eixample,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190204,80190208,02,l'Antiga Esquerra de l'Eixample,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190205,80190209,02,la Nova Esquerra de l'Eixample,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190206,80190210,02,Sant Antoni,Eixample,0801902,True,True,True,True,name and district + position rule
+neighbourhood,080190301,80190311,03,el Poble-sec,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190302,80190312,03,la Marina del Prat Vermell,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190303,80190313,03,la Marina de Port,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190304,80190314,03,la Font de la Guatlla,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190305,80190315,03,Hostafrancs,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190306,80190316,03,la Bordeta,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190307,80190317,03,Sants - Badal,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190308,80190318,03,Sants,Sants-Montjuïc,0801903,True,True,True,True,name and district + position rule
+neighbourhood,080190401,80190419,04,les Corts,Les Corts,0801904,True,True,True,True,name and district + position rule
+neighbourhood,080190402,80190420,04,la Maternitat i Sant Ramon,Les Corts,0801904,True,True,True,True,name and district + position rule
+neighbourhood,080190403,80190421,04,Pedralbes,Les Corts,0801904,True,True,True,True,name and district + position rule
+neighbourhood,080190501,80190522,05,"Vallvidrera, el Tibidabo i les Planes",Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190502,80190523,05,Sarrià,Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190503,80190524,05,les Tres Torres,Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190504,80190525,05,Sant Gervasi - la Bonanova,Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190505,80190526,05,Sant Gervasi - Galvany,Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190506,80190527,05,el Putxet i el Farró,Sarrià-Sant Gervasi,0801905,True,True,True,True,name and district + position rule
+neighbourhood,080190601,80190628,06,Vallcarca i els Penitents,Gràcia,0801906,True,True,True,True,name and district + position rule
+neighbourhood,080190602,80190629,06,el Coll,Gràcia,0801906,True,True,True,True,name and district + position rule
+neighbourhood,080190603,80190630,06,la Salut,Gràcia,0801906,True,True,True,True,name and district + position rule
+neighbourhood,080190604,80190631,06,la Vila de Gràcia,Gràcia,0801906,True,True,True,True,name and district + position rule
+neighbourhood,080190605,80190632,06,el Camp d'en Grassot i Gràcia Nova,Gràcia,0801906,True,True,True,True,name and district + position rule
+neighbourhood,080190701,80190733,07,el Baix Guinardó,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190702,80190734,07,Can Baró,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190703,80190735,07,el Guinardó,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190704,80190736,07,la Font d'en Fargues,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190705,80190737,07,el Carmel,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190706,80190738,07,la Teixonera,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190707,80190739,07,Sant Genís dels Agudells,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190708,80190740,07,Montbau,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190709,80190741,07,la Vall d'Hebron,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190710,80190742,07,la Clota,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190711,80190743,07,Horta,Horta-Guinardó,0801907,True,True,True,True,name and district + position rule
+neighbourhood,080190801,80190844,08,Vilapicina i la Torre Llobeta,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190802,80190845,08,Porta,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190803,80190846,08,el Turó de la Peira,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190804,80190847,08,Can Peguera,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190805,80190848,08,la Guineueta,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190806,80190849,08,Canyelles,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190807,80190850,08,les Roquetes,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190808,80190851,08,Verdun,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190809,80190852,08,la Prosperitat,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190810,80190853,08,la Trinitat Nova,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190811,80190854,08,Torre Baró,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190812,80190855,08,Ciutat Meridiana,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190813,80190856,08,Vallbona,Nou Barris,0801908,True,True,True,True,name and district + position rule
+neighbourhood,080190901,80190957,09,la Trinitat Vella,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190902,80190958,09,Baró de Viver,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190903,80190959,09,el Bon Pastor,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190904,80190960,09,Sant Andreu,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190905,80190961,09,la Sagrera,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190906,80190962,09,el Congrés i els Indians,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080190907,80190963,09,Navas,Sant Andreu,0801909,True,True,True,True,name and district + position rule
+neighbourhood,080191001,80191064,10,el Camp de l'Arpa del Clot,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191002,80191065,10,el Clot,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191003,80191066,10,el Parc i la Llacuna del Poblenou,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191004,80191067,10,la Vila Olímpica del Poblenou,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191005,80191068,10,el Poblenou,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191006,80191069,10,Diagonal Mar i el Front Marítim del Poblenou,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191007,80191070,10,el Besòs i el Maresme,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191008,80191071,10,Provençals del Poblenou,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191009,80191072,10,Sant Martí de Provençals,Sant Martí,0801910,True,True,True,True,name and district + position rule
+neighbourhood,080191010,80191073,10,la Verneda i la Pau,Sant Martí,0801910,True,True,True,True,name and district + position rule
