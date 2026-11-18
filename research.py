@@ -557,7 +557,7 @@ def q10(t):
     frame = pd.DataFrame(means).fillna(0)
     share_in_origin = frame / frame.sum()
     share_all = frame.sum(axis=1) / frame.values.sum()
-    lq = share_in_origin.div(share_all, axis=0)
+    lq = share_in_origin.div(share_all, axis=0).round(3)
     tops = {o: set(frame[o].sort_values(ascending=False).head(10).index) for o in VISITOR_ORIGINS}
     overlap = {f"{a}-{b}": len(tops[a] & tops[b]) for a, b in [("Internacional", "Nacional"), ("Internacional", "Regional"), ("Nacional", "Regional")]}
     specialised = {o: int((lq[o] >= rule["lq"]).sum()) for o in VISITOR_ORIGINS}
