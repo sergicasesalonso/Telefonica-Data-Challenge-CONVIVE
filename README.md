@@ -2,8 +2,43 @@
 
 Team 102_A (Convive Lab) · Mobile Data Challenge 2026, Challenge #2 "Visitors and residents in the same space".
 
-- **Iteration 2 (current):** real Smart Steps data, aggregated statistics and a preliminary dashboard answering Q1 to Q6.
+- **Iteration 3 (current, 10-23 Nov 2026):** validated aggregated tables, research questions Q1-Q17 quantified with explicit decision rules (Business Manager feedback of 9 Nov), analysis of the neighbourhoods with very few data, and a dashboard with five tabs and neighbourhood, district and day filters.
+- **Iteration 2:** real Smart Steps data, aggregated statistics and a preliminary dashboard answering Q1 to Q6.
 - **Iteration 1:** notebook structure, base map, data review plan and analytical toolkit, on synthetic data. It still runs.
+
+## Iteration 3: how to run
+
+```bash
+pip install -r requirements.txt
+
+# 1. Iteration 2 statistics must exist (they are compared with Iteration 3 in the validation)
+python run_iteration2.py stats
+
+# 2. Iteration 3: aggregate (2.2.1, pandas only), validate (2.2.2), answer Q1-Q17 and write reports and figures (3.2.x)
+python run_iteration3.py                 # or: python run_iteration3.py validate report   (no raw data needed)
+
+# 3. Notebook and dashboard
+python make_notebook_i3.py
+python -m jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=-1 CONVIVE_Iteration3.ipynb
+streamlit run app/dashboard.py
+```
+
+Optional: `python app/check_dashboard.py` (every filter, 16 app cases) and `python app/take_screenshots_i3.py` (PNG of each new view).
+
+The aggregation step reads the monthly CSV files directly with pandas, so it also runs on a computer without DuckDB or Parquet support (3.3.1 reproducibility). Everything after it reads only aggregated tables.
+
+| WBS | Output (in `deliverables/iteration3/` unless stated) | Code |
+|---|---|---|
+| 2.2.1 | `2.2.1_aggregates/*.csv`: countries (T8), provinces (T7), municipalities (T6), profile (T9), daily neighbourhood visitors (T5), coverage, trips between neighbourhoods by year (M1) | `aggregates.py` |
+| 2.2.2 | `2.2.2_validation_log.md` / `.csv`: 17 checks, including identical M1 totals through two independent paths | `validation.py` |
+| 3.2.0 | `3.2.0_ResearchQuestions_v0.3.md`: every question with metric, decision rule and verdict | `research_report.py` |
+| 3.2.4 | `3.2.4_quantified_answers.md` / `.csv`: question -> metric -> threshold -> answer -> verdict | `research.py` (`THRESHOLDS`) |
+| 3.2.1 | `3.2.1_exploratory_analysis.md`: countries, provinces, municipalities, profile, market growth (Q11-Q14, Q17) | `research.py` |
+| 3.2.2 | `3.2.2_geographic_analysis.md`: concentration, LQ, rankings, trips, **low-data neighbourhoods (I8)** | `research.py` |
+| 3.2.3 | `3.2.3_temporal_analysis.md`: seasonality, weekends, growth, nights, unusual days, rhythm (Q2, Q4, Q5, Q7, Q9, Q15) | `research.py` |
+| 4.2.2 | Dashboard tabs "Research answers", "Who visits", "Data quality"; `figures/*.png` | `app/dashboard.py`, `app/dashboard_i3.py` |
+| 4.2.3 | Sidebar filters by district, neighbourhood and day type, applied to every view; "Neighbourhood explorer" tab | `app/dashboard_data.py` |
+| Notebook | `CONVIVE_Iteration3.ipynb` at the repository root | `make_notebook_i3.py` |
 
 ## Iteration 2: how to run
 
@@ -57,6 +92,14 @@ quality.py                   WBS 3.1.0, 3.1.1, 3.1.2: inventory, inspection, dat
 cleaning.py                  WBS 3.1.3: clean Parquet and cleaning log
 descriptives.py              WBS 3.1.6, 4.2.1: aggregated tables, headline numbers, standalone maps
 run_iteration2.py            runs the pipeline steps
+aggregates.py                WBS 2.2.1: Iteration 3 aggregated tables (pandas only)
+validation.py                WBS 2.2.2: validation log of the aggregated tables
+research.py                  WBS 3.2.1-3.2.4: decision rules (THRESHOLDS) and answers to Q1-Q17, low-data neighbourhoods
+research_report.py           WBS 3.2.0-3.2.4: Markdown reports, CSV tables and figures
+run_iteration3.py            runs the Iteration 3 steps
+make_notebook_i3.py          builds CONVIVE_Iteration3.ipynb
+app/dashboard_i3.py          data logic of the Iteration 3 dashboard tabs
+app/take_screenshots_i3.py   screenshots of the Iteration 3 views
 make_delivery.py             builds the delivery document
 app/dashboard.py             WBS 4.2.0: Streamlit dashboard (dashboard_data.py holds its logic)
 app/check_dashboard.py       automatic checks of the dashboard
