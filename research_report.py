@@ -478,6 +478,7 @@ def answers_table(r):
     for qid, (belief, question, data, metric, limit) in QUESTIONS.items():
         rows.append({"id": qid, "belief": belief, "question": question, "data": data, "metric": metric,
                      "decision_rule": R.THRESHOLDS[qid]["rule"], "answer": r[qid]["answer"], "verdict": r[qid]["verdict"],
+                     "belief_holds": r[qid]["holds"],
                      "limitation": limit, "iteration": "Q1-Q6 quantified (3.2.4)" if int(qid[1:]) <= 6 else "New in Iteration 3 (3.2.1-3.2.3)"})
     return pd.DataFrame(rows)
 
@@ -494,7 +495,8 @@ def write_md(path, title, intro, sections):
 def q_block(r, qid, figure=None):
     belief, question, data, metric, limit = QUESTIONS[qid]
     text = (f"*Belief:* \"{belief}\"  \n*Question:* {question}  \n*Data:* {data} · *Metric:* {metric}  \n"
-            f"*Decision rule:* {R.THRESHOLDS[qid]['rule']}  \n\n**Answer.** {r[qid]['answer']}  \n**Verdict: {r[qid]['verdict']}.**  \n"
+            f"*Decision rule:* {R.THRESHOLDS[qid]['rule']}  \n\n**Answer.** {r[qid]['answer']}  \n**Verdict: {r[qid]['verdict']}.** "
+            f"Belief holds: **{r[qid]['holds']}**.  \n"
             f"*Limitation:* {limit}")
     if figure:
         text += f"\n\n![{qid}](figures/{figure})"
@@ -592,9 +594,9 @@ def write_all(t, r):
                "Q5": "q5_growth.png", "Q6": "q6_tourist_barris.png", "Q7": "q7_nights.png", "Q8": "q8_rank_season.png",
                "Q9": "q9_unusual_days.png", "Q10": "q10_lq_maps.png", "Q12": "q12_q13_residence.png", "Q14": "q14_profile.png",
                "Q15": "q15_rhythm.png", "Q17": "q17_country_growth.png"}
-    table_lines = ["| ID | Belief | Metric | Decision rule | Answer | Verdict |", "|---|---|---|---|---|---|"]
+    table_lines = ["| ID | Belief | Metric | Decision rule | Answer | Verdict | Belief holds? |", "|---|---|---|---|---|---|---|"]
     for row in answers.itertuples():
-        table_lines.append(f"| {row.id} | {row.belief} | {row.metric} | {row.decision_rule} | {row.answer} | **{row.verdict}** |")
+        table_lines.append(f"| {row.id} | {row.belief} | {row.metric} | {row.decision_rule} | {row.answer} | **{row.verdict}** | {row.belief_holds} |")
     write_md(R.OUT / "3.2.4_quantified_answers.md", "3.2.4 Quantified criteria and answers (Q1-Q6, plus Q7-Q17)",
              "Business Manager feedback of 9 Nov (I10): every question must be precise and quantified, with an explicit criterion so that the data can "
              "answer it. Each rule below was fixed in `research.THRESHOLDS` before the answer was computed. A change to a rule is a change request.",
@@ -618,9 +620,9 @@ def write_all(t, r):
               ("Data limits found", "- Three days are missing in every daily file (2024-02-11, 2025-04-13, 2025-05-20); no imputation.\n"
                "- 2025 covers January to August: growth uses equivalent months only.\n"
                "- The causes of peak days need an external event calendar; the data only date them.")])
-    rq = ["| ID | Belief | Question (quantified) | Data | Metric | Decision rule | Verdict |", "|---|---|---|---|---|---|---|"]
+    rq = ["| ID | Belief | Question (quantified) | Data | Metric | Decision rule | Verdict | Belief holds? |", "|---|---|---|---|---|---|---|---|"]
     for row in answers.itertuples():
-        rq.append(f"| {row.id} | {row.belief} | {row.question} | {row.data} | {row.metric} | {row.decision_rule} | {row.verdict} |")
+        rq.append(f"| {row.id} | {row.belief} | {row.question} | {row.data} | {row.metric} | {row.decision_rule} | {row.verdict} | {row.belief_holds} |")
     write_md(R.OUT / "3.2.0_ResearchQuestions_v0.3.md", "CONVIVE Research Questions v0.3 (WBS 3.2.0)",
              "v0.3 applies the Business Manager feedback of 9 Nov (I10, change C12): every question now states a metric and an explicit threshold, "
              "Q3 adds the breakdown by country of residence, and Q16-Q17 add more concrete questions about tourists. Validation by the BM is pending.",
