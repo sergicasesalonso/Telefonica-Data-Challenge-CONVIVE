@@ -693,6 +693,31 @@ def low_data(t):
     return table, median
 
 
+def belief_holds(qid, res):
+    """Does the common belief hold under the decision rule? Yes / Partly / No (derived from the rule, never typed by hand)."""
+    v, verdict = res["value"], res["verdict"].lower()
+    rules = {
+        "Q1": "Yes" if v <= THRESHOLDS["Q1"]["n50_concentrated"] else "No",
+        "Q2": "Yes" if v >= THRESHOLDS["Q2"]["strong"] else "No",
+        "Q3": "Yes" if verdict.startswith("mostly") else "Partly",
+        "Q4": "Yes" if v >= THRESHOLDS["Q4"]["flood"] else "No",
+        "Q5": "Yes" if verdict.startswith("keeps growing") else "No",
+        "Q6": "Yes" if v == THRESHOLDS["Q6"]["top_n"] else ("Partly" if v > 0 else "No"),
+        "Q7": "Yes" if verdict.startswith("holds") else "No",
+        "Q8": "Yes" if verdict.startswith("stable") else "No",
+        "Q9": "Partly" if v > 0 else "No",
+        "Q10": "Yes" if v >= THRESHOLDS["Q10"]["overlap"] else "No",
+        "Q11": "Yes" if v >= THRESHOLDS["Q11"]["top5"] else "No",
+        "Q12": "Yes" if v >= THRESHOLDS["Q12"]["share"] else "No",
+        "Q13": "Yes" if v >= THRESHOLDS["Q13"]["share"] else "No",
+        "Q14": "Yes" if verdict.startswith("young and high") else ("Partly" if "high-income" in verdict and "not mainly" not in verdict else "No"),
+        "Q15": "Yes" if verdict.startswith("same") else "No",
+        "Q16": "Yes" if v >= THRESHOLDS["Q16"]["gap"] else "No",
+        "Q17": "No" if v > 0 else "Yes",
+    }
+    return rules[qid]
+
+
 def run_all(t=None):
     t = t or load_all()
     r = {}
@@ -714,6 +739,8 @@ def run_all(t=None):
     r["Q16"] = q16(t, r["Q1"])
     r["Q17"] = q17(t)
     r["low_data"], r["low_data_median"] = low_data(t)
+    for qid in [k for k in r if k.startswith("Q")]:
+        r[qid]["holds"] = belief_holds(qid, r[qid])
     return t, r
 
 
