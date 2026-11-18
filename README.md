@@ -2,7 +2,7 @@
 
 Team 102_A (Convive Lab) · Mobile Data Challenge 2026, Challenge #2 "Visitors and residents in the same space".
 
-- **Iteration 3 (current, 10-23 Nov 2026):** validated aggregated tables, research questions Q1-Q17 quantified with explicit decision rules (Business Manager feedback of 9 Nov), analysis of the neighbourhoods with very few data, and a dashboard with five tabs and neighbourhood, district and day filters.
+- **Iteration 3 (current, 10-23 Nov 2026):** validated aggregated tables, research questions Q1-Q20 quantified with explicit decision rules (Business Manager feedback of 9 Nov), analysis of the neighbourhoods with very few data, a nationality analysis of international visitors (161 countries), and a dashboard with six tabs and neighbourhood, district and day filters.
 - **Iteration 2:** real Smart Steps data, aggregated statistics and a preliminary dashboard answering Q1 to Q6.
 - **Iteration 1:** notebook structure, base map, data review plan and analytical toolkit, on synthetic data. It still runs.
 
@@ -14,7 +14,7 @@ pip install -r requirements.txt
 # 1. Iteration 2 statistics must exist (they are compared with Iteration 3 in the validation)
 python run_iteration2.py stats
 
-# 2. Iteration 3: aggregate (2.2.1, pandas only), validate (2.2.2), answer Q1-Q17 and write reports and figures (3.2.x)
+# 2. Iteration 3: aggregate (2.2.1, pandas only), validate (2.2.2), answer Q1-Q20 and write reports and figures (3.2.x)
 python run_iteration3.py                 # or: python run_iteration3.py validate report   (no raw data needed)
 
 # 3. Notebook and dashboard
@@ -33,7 +33,7 @@ The aggregation step reads the monthly CSV files directly with pandas, so it als
 | 2.2.2 | `2.2.2_validation_log.md` / `.csv`: 17 checks, including identical M1 totals through two independent paths | `validation.py` |
 | 3.2.0 | `3.2.0_ResearchQuestions_v0.3.md`: every question with metric, decision rule and verdict | `research_report.py` |
 | 3.2.4 | `3.2.4_quantified_answers.md` / `.csv`: question -> metric -> threshold -> answer -> verdict | `research.py` (`THRESHOLDS`) |
-| 3.2.1 | `3.2.1_exploratory_analysis.md`: countries, provinces, municipalities, profile, market growth (Q11-Q14, Q17) | `research.py` |
+| 3.2.1 | `3.2.1_exploratory_analysis.md`: countries, provinces, municipalities, profile, market growth, nationalities of international visitors (Q11-Q14, Q17-Q20) | `research.py`, `nationalities.py` |
 | 3.2.2 | `3.2.2_geographic_analysis.md`: concentration, LQ, rankings, trips, **low-data neighbourhoods (I8)** | `research.py` |
 | 3.2.3 | `3.2.3_temporal_analysis.md`: seasonality, weekends, growth, nights, unusual days, rhythm (Q2, Q4, Q5, Q7, Q9, Q15) | `research.py` |
 | 4.2.2 | Dashboard tabs "Research answers", "Who visits", "Data quality"; `figures/*.png` | `app/dashboard.py`, `app/dashboard_i3.py` |
@@ -94,7 +94,8 @@ descriptives.py              WBS 3.1.6, 4.2.1: aggregated tables, headline numbe
 run_iteration2.py            runs the pipeline steps
 aggregates.py                WBS 2.2.1: Iteration 3 aggregated tables (pandas only)
 validation.py                WBS 2.2.2: validation log of the aggregated tables
-research.py                  WBS 3.2.1-3.2.4: decision rules (THRESHOLDS) and answers to Q1-Q17, low-data neighbourhoods
+research.py                  WBS 3.2.1-3.2.4: decision rules (THRESHOLDS) and answers to Q1-Q20, low-data neighbourhoods
+nationalities.py             WBS 3.2.1: nationalities of international visitors (T8): profile per country, season, neighbourhoods (LQ), world regions
 research_report.py           WBS 3.2.0-3.2.4: Markdown reports, CSV tables and figures
 run_iteration3.py            runs the Iteration 3 steps
 make_notebook_i3.py          builds CONVIVE_Iteration3.ipynb
