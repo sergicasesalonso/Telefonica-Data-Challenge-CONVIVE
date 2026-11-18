@@ -93,7 +93,7 @@ def main():
             shot("01_overview_filters")
 
             # Research answers
-            open_tab(page, "Research answers Q1–Q17")
+            open_tab(page, "Research answers Q1–Q20")
             shot("02_research_answers_table")
             pick(page, "Question in detail", "Q1 · How concentrated are visitors across the 73 neighbourhoods?")
             shot("03_research_answer_q1", block(page, "Decision rule."))
@@ -112,6 +112,25 @@ def main():
             page.get_by_text("Province (national, T7)", exact=True).click()
             settle(page)
             shot("08_who_provinces")
+
+            # Nationalities (T8)
+            open_tab(page, "Nationalities")
+            settle(page, 3000)
+            shot("14_nationalities_france")
+            page.mouse.wheel(0, 900)
+            settle(page, 1500)
+            shot("15_nationalities_france_map")
+            page.mouse.wheel(0, -2000)
+            settle(page, 800)
+            pick(page, "Country of residence", "Korea S, Republic of")
+            page.mouse.wheel(0, 900)
+            settle(page, 1500)
+            shot("16_nationalities_korea_map")
+            page.mouse.wheel(0, 1300)
+            settle(page, 1500)
+            shot("17_nationalities_table")
+            page.mouse.wheel(0, -4000)
+            settle(page, 800)
 
             # Data quality
             open_tab(page, "Data quality")

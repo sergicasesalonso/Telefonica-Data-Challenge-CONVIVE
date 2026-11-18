@@ -123,6 +123,10 @@ def check_app():
         "one district": {"f_districts": ["Ciutat Vella"]},
         "one neighbourhood": {"f_barrios": ["Verdun"]},
         "district + weekdays + 2024": {"f_districts": ["Eixample"], "f_days": "Weekdays (Mon-Fri)", "f_years": [2024]},
+        "nationality: South Korea": {"nat_country": "Korea S, Republic of"},
+        "nationality: Japan, excursionists, 2025": {"nat_country": "Japan", "f_types": ["Excursionista"], "f_years": [2025]},
+        "nationality: China + one district": {"nat_country": "China", "f_districts": ["Sarrià-Sant Gervasi"]},
+        "only national visitors (nationality tab)": {"f_origins": ["Nacional"]},
     }
     failures = 0
     for name, state in cases.items():

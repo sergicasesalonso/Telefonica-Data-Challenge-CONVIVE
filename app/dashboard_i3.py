@@ -4,9 +4,13 @@ Reads only aggregated outputs: deliverables/iteration3/2.2.1_aggregates/*.csv an
 research_report.py. Sums of unique visitors across neighbourhoods are always labelled 'presences'.
 """
 
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import nationalities as N  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 I3 = ROOT / "deliverables" / "iteration3"
@@ -41,7 +45,13 @@ def load():
         "t7_barrio": _read(AGG / "t7_province_barrio_year.csv"),
         "t6_barrio": _read(AGG / "t6_municipality_barrio_year.csv"),
         "od": _read(AGG / "m1_od_year_by_origin.csv"),
+        "nat_profile": _read(I3 / "3.2.1_nationality_profile.csv"),
+        "nat_regions": _read(I3 / "3.2.1_world_regions.csv"),
     }
+    if t["nat_profile"] is not None:
+        _num(t["nat_profile"], "rank", "share", "tourist_share", "growth_23_25", "summer_ratio", "distinctive_lq", "overlap_int_top10")
+    if t["nat_regions"] is not None:
+        _num(t["nat_regions"], "share_jan_aug_2023", "share_jan_aug_2024", "share_jan_aug_2025", "growth_23_25")
     for key in ("t8_city", "t7_city", "t6_city", "t9_city"):
         if t[key] is not None:
             _num(t[key], "presences", "year", "month")
@@ -139,3 +149,44 @@ def explorer(t, tables, cod_barrio, f):
             "low_data": bool(low.loc[cod_barrio, "low_data"]) if low is not None and cod_barrio in low.index else False,
             "low_reason": low.loc[cod_barrio, "reason"] if low is not None and cod_barrio in low.index else "",
             "lq": lq.loc[name] if lq is not None and name in lq.index else None}
+
+
+# 4.2.2 · nationalities (T8) -----------------------------------------------------------------------------------------
+def _months(f):
+    return list(range(f.month_from, f.month_to + 1))
+
+
+def country_ranking(t, f):
+    share = N.shares(t, years=f.years, months=_months(f), tipo=f.types)
+    if share.empty:
+        return pd.DataFrame(columns=["country", "share"])
+    return share.rename("share").reset_index().rename(columns={"index": "country"})
+
+
+def country_card(t, f, country, ranking):
+    """KPIs of one country: share and rank in the selection; type split in the selection; whole-period growth and season."""
+    rank = int(ranking.index[ranking["country"] == country][0]) + 1
+    sel = N.shares(t, years=f.years, months=_months(f))
+    tour = N.shares(t, years=f.years, months=_months(f), tipo="Turista")
+    city = t["t8_city"]
+    city = city[(city["country"] == country) & city["year"].isin(f.years) & city["month"].between(f.month_from, f.month_to)]
+    tourist_share = city.loc[city["tipo_visitante"] == "Turista", "presences"].sum() / city["presences"].sum() if city["presences"].sum() else None
+    prof = t["nat_profile"].set_index("country") if t.get("nat_profile") is not None else None
+    row = prof.loc[country] if prof is not None and country in prof.index else {}
+    return {"share": float(ranking.set_index("country").loc[country, "share"]), "rank": rank, "tourist_share": tourist_share,
+            "growth_23_25": row.get("growth_23_25") if len(row) else None, "peak_month": row.get("peak_month", "") if len(row) else "",
+            "summer_ratio": row.get("summer_ratio", float("nan")) if len(row) else float("nan"), "region": N.region(country)}
+
+
+def country_monthly(t, f, country):
+    return N.monthly(t, country, years=f.years, months=_months(f), tipo=f.types)
+
+
+def country_season(t, country):
+    idx = N.seasonal_index(t, [country]).loc[country]
+    return pd.DataFrame({"month": N.MONTHS_EN, "index": idx.reindex(range(1, 13)).values})
+
+
+def country_lq(t, f, country):
+    lq = N.location_quotients(t, years=[y for y in f.years if y in set(t["t8_barrio"]["year"])] or None)
+    return lq[lq["country"] == country]
