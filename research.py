@@ -677,7 +677,7 @@ def low_data(t):
         "na_share_T6": piv.get("T6"), "na_share_T7": piv.get("T7"), "na_share_T8": piv.get("T8"), "na_share_T9": piv.get("T9"),
         "rows_T8_vs_median": rows_rel.get("T8"),
         "resident_trips_in_2024": resident_in, "visitor_trips_in_2024": visitor_in,
-        "visitor_share_trips": shares["visitor_share"]}).reset_index()
+        "visitor_share_trips": shares["visitor_share"]}).rename_axis("cod_barrio").reset_index()
     table["resident_trips_vs_median"] = table["resident_trips_in_2024"] / table["resident_trips_in_2024"].median()
     table["visitors_per_1000_resident_trips"] = table["mean_monthly_visitors"] / table["resident_trips_in_2024"] * 1000 * 12
     cond_value = table["vs_median"] < 0.10

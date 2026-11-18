@@ -1,4 +1,4 @@
-"""Checks for the dashboard (WBS 4.2.0, final check of the Iteration 2 plan).
+"""Checks for the dashboard (WBS 4.2.0; extended in Iteration 3 for the 4.2.3 day-type and area filters and the new tabs).
 
   1. Each filter changes each view, computed on the view's data.
   2. The app runs without an exception on normal and edge-case selections.
@@ -29,9 +29,15 @@ VARIANTS = {
     "month range": dd.Filters(ALL_YEARS, 3, 5, dd.VISITOR_ORIGINS, dd.VISITOR_TYPES),
     "origin": dd.Filters(ALL_YEARS, 1, 12, ["Internacional", "Regional"], dd.VISITOR_TYPES),
     "type": dd.Filters(ALL_YEARS, 1, 12, dd.VISITOR_ORIGINS, ["Turista"]),
+    # Iteration 3 (4.2.3)
+    "day type": dd.Filters(ALL_YEARS, 1, 12, dd.VISITOR_ORIGINS, dd.VISITOR_TYPES, "Weekends (Sat-Sun)"),
+    "district": dd.Filters(ALL_YEARS, 1, 12, dd.VISITOR_ORIGINS, dd.VISITOR_TYPES, "All days",
+                           ["080190101", "080190102", "080190103", "080190104"]),
 }
 # Mobility has no visitor type, so this one cannot change. The view says so on screen.
-EXPECTED_UNCHANGED = {("Q6 trip share", "type")}
+# Monthly files have no day detail, so the day-type filter changes only the daily view (Q4) and trips (Q6).
+EXPECTED_UNCHANGED = {("Q6 trip share", "type")} | {(v, "day type") for v in (
+    "Q3 KPI tiles", "Q3 stacked bars", "Q2 monthly evolution", "Q5 city comparison", "Q5 neighbourhood change", "Q1 map and top 10")}
 
 
 def fingerprint(value):
@@ -113,6 +119,10 @@ def check_app():
         "Regional tourists (empty by definition)": {"f_origins": ["Regional"], "f_types": ["Turista"]},
         "residents and visitors": {"f_origins": dd.TRIP_ORIGINS},
         "excursionists": {"f_types": ["Excursionista"]},
+        "weekends only": {"f_days": "Weekends (Sat-Sun)"},
+        "one district": {"f_districts": ["Ciutat Vella"]},
+        "one neighbourhood": {"f_barrios": ["Verdun"]},
+        "district + weekdays + 2024": {"f_districts": ["Eixample"], "f_days": "Weekdays (Mon-Fri)", "f_years": [2024]},
     }
     failures = 0
     for name, state in cases.items():
