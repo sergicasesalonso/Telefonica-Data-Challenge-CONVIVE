@@ -149,8 +149,8 @@ MEASURE = dd.measure_label(f)
 Y_MONTH = "Presences per month (selected area)" if f.has_area else "Unique visitors per month"
 Y_DAY = "Mean presences per day (selected area)" if f.has_area else "Mean unique visitors per day"
 
-tab_q, tab_rq, tab_explore, tab_who, tab_quality = st.tabs(
-    ["Q1–Q6 views", "Research answers Q1–Q17", "Neighbourhood explorer", "Who visits", "Data quality"])
+tab_q, tab_rq, tab_explore, tab_who, tab_nat, tab_quality = st.tabs(
+    ["Q1–Q6 views", "Research answers Q1–Q20", "Neighbourhood explorer", "Who visits", "Nationalities", "Data quality"])
 
 with tab_q:
     with st.expander("How to read this", expanded=True):
@@ -357,7 +357,7 @@ with tab_rq:
         answers = i3["answers"]
         st.subheader("Each question has a metric, a decision rule fixed in advance, an answer and a verdict")
         st.markdown('<div class="limit">Business Manager feedback of 9 Nov: every question must be quantified with an explicit threshold. '
-                    'The rule decides the verdict, not the number. Q1–Q6 were shown at the Iteration 2 demo; Q7–Q17 are new in Iteration 3.</div>',
+                    'The rule decides the verdict, not the number. Q1–Q6 were shown at the Iteration 2 demo; Q7–Q20 are new in Iteration 3 (Q18–Q20: nationalities).</div>',
                     unsafe_allow_html=True)
         counts = answers["belief_holds"].value_counts()
         a, b, c, d = st.columns(4)
@@ -391,7 +391,8 @@ with tab_rq:
             figure = {"Q1": "q1_concentration", "Q2": "q2_seasonality", "Q3": "q3_origin_countries", "Q4": "q4_weekend_barrios",
                       "Q5": "q5_growth", "Q6": "q6_tourist_barris", "Q7": "q7_nights", "Q8": "q8_rank_season", "Q9": "q9_unusual_days",
                       "Q10": "q10_lq_maps", "Q11": "q3_origin_countries", "Q12": "q12_q13_residence", "Q13": "q12_q13_residence",
-                      "Q14": "q14_profile", "Q15": "q15_rhythm", "Q16": "q1_concentration", "Q17": "q17_country_growth"}.get(row["id"])
+                      "Q14": "q14_profile", "Q15": "q15_rhythm", "Q16": "q1_concentration", "Q17": "q17_country_growth",
+                      "Q18": "nat_season_heatmap", "Q19": "nat_lq_maps", "Q20": "nat_markets"}.get(row["id"])
             path = d3.FIGURES / f"{figure}.png"
             if figure and path.exists():
                 st.image(str(path), width="stretch")
@@ -524,6 +525,102 @@ with tab_who:
                                     hovertemplate=f"{origin} · %{{x}}: %{{y:.1%}}<extra></extra>")
                 fig.update_layout(barmode="group", bargap=0.25, title={"text": title, "font": {"size": 14}})
                 show(base_layout(fig, 320, "Share of presences", ".0%"), f"who_{dimension}")
+
+# ------------------------------------------------------------------------------------------------
+# Iteration 3 (4.2.2): nationalities of international visitors (T8)
+# ------------------------------------------------------------------------------------------------
+with tab_nat:
+    if not d3.available(i3) or no_years or i3["t8_city"] is None:
+        st.info("Select at least one year, and run `python research_report.py`.")
+    else:
+        st.markdown('<div class="limit">Country of residence of international visitors (T8). Shares are of presences (person × neighbourhood), '
+                    'not of people. Year, month and visitor-type filters apply; the area filter applies to the neighbourhood table. '
+                    'Countries with fewer than 15 people in a neighbourhood are grouped by Telefónica as NA and left out.</div>',
+                    unsafe_allow_html=True)
+        ranking = d3.country_ranking(i3, f)
+        if ranking.empty:
+            st.info("No international visitors for this selection.")
+        else:
+            countries = ranking["country"].tolist()
+            country = st.selectbox("Country of residence", countries, index=0, key="nat_country",
+                                   format_func=lambda c: f"{c} ({ranking.set_index('country').loc[c, 'share']:.1%})")
+            k = d3.country_card(i3, f, country, ranking)
+            st.markdown(f"### {country} · {k['region']}")
+            a, b, c, d, e = st.columns(5)
+            a.metric("Share of international presences", f"{k['share']:.1%}", help="Selected years, months and visitor types.")
+            b.metric("Rank among countries", f"{k['rank']} of {len(ranking)}")
+            c.metric("Overnight tourists", f"{k['tourist_share']:.0%}" if pd.notna(k["tourist_share"]) else "–",
+                     help="Share of the country's presences that are 'Turista' (at least one night). The rest are day-trippers.")
+            d.metric("Jan–Aug 2023→2025", f"{k['growth_23_25']:+.0%}" if pd.notna(k["growth_23_25"]) else "–",
+                     help="Change in January–August presences (equivalent months). Whole period, not affected by the filters.")
+            e.metric("Peak month", k["peak_month"] or "–", help=f"Summer (Jun–Aug) / other months: {k['summer_ratio']:.2f}x (2023–2024).")
+            left, right = st.columns([1.15, 1])
+            with left:
+                st.markdown("**Presences per month, overnight tourists and day-trippers**")
+                series = d3.country_monthly(i3, f, country)
+                fig = go.Figure()
+                for tipo, colour, dash, label in [("Turista", "#0072B2", "solid", "Overnight tourists"), ("Excursionista", "#56B4E9", "dash", "Day-trippers")]:
+                    if tipo in series:
+                        fig.add_scatter(x=series.index, y=series[tipo], name=label, mode="lines+markers",
+                                        line={"color": colour, "width": 2, "dash": dash}, marker={"size": 5},
+                                        hovertemplate=f"{label}<br>%{{x|%b %Y}}: %{{y:,.0f}} presences<extra></extra>")
+                fig = base_layout(fig, 330, "Presences per month")
+                fig.update_xaxes(tickformat="%b %Y")
+                show(fig, "nat_month")
+            with right:
+                st.markdown("**Seasonal index (mean month = 100), 2023–2024**")
+                season = d3.country_season(i3, country)
+                fig = go.Figure(go.Bar(x=season["month"], y=season["index"], marker={"color": ["#0072B2" if m in ("Jun", "Jul", "Aug") else "#9ab7d3" for m in season["month"]]},
+                                       text=season["index"].round(0).astype(int), textposition="outside", cliponaxis=False,
+                                       hovertemplate="%{x}: %{y:.0f}<extra></extra>"))
+                fig.add_hline(y=100, line={"color": MUTED, "width": 1, "dash": "dot"})
+                show(base_layout(fig, 330, "Index"), "nat_season")
+            st.markdown(f"**Where {country} visitors are: location quotient by neighbourhood** "
+                        "(share of the neighbourhood in this country's presences ÷ its share in all international presences; 1 = same mix)")
+            lq = d3.country_lq(i3, f, country)
+            left, right = st.columns([0.95, 1.15])
+            with left:
+                frame = lq[lq["reliable"]].assign(lq_shown=lambda x: x["lq"].clip(upper=2.5))
+                show(choropleth(frame, "lq_shown", "LQ", "<b>%{customdata[0]}</b><br>%{customdata[1]}<br>LQ %{z:.2f}<extra></extra>",
+                                colorscale=[[0, "#2166ac"], [0.318, "#f7f7f7"], [1, "#b2182b"]], zlimits=(0.3, 2.5), height=470), "nat_map")
+                st.caption("Grey: fewer than 1,000 presences per month of this country (ratio not stable). Colour capped at 2.5.")
+            with right:
+                top = lq.sort_values("mean_monthly", ascending=False)
+                if f.has_area:
+                    top = top[top["cod_barrio"].isin(f.area)]
+                table = top.head(15)[["barrio_name", "distrito_name", "mean_monthly", "share_of_country", "lq"]].copy()
+                table["mean_monthly"] = table["mean_monthly"].map(dd.format_count)
+                table["share_of_country"] = table["share_of_country"].map("{:.1%}".format)
+                table["lq"] = table["lq"].map("{:.2f}".format)
+                st.dataframe(table.rename(columns={"barrio_name": "Neighbourhood", "distrito_name": "District", "mean_monthly": "Presences/month",
+                                                   "share_of_country": "Share of country", "lq": "LQ"}), hide_index=True, width="stretch", height=470,
+                             column_config={"Neighbourhood": st.column_config.TextColumn(width=210), "District": st.column_config.TextColumn(width=110),
+                                            "LQ": st.column_config.TextColumn(width=50)})
+        st.divider()
+        st.markdown("**All nationalities (whole period): every indicator of the analysis (3.2.1, Q18–Q20)**")
+        prof = i3.get("nat_profile")
+        if prof is not None:
+            view = prof[["rank", "country", "region", "share", "tourist_share", "growth_23_25", "summer_ratio", "peak_month", "top_barrio",
+                         "distinctive_barrio", "distinctive_lq", "overlap_int_top10"]].head(60).copy()
+            st.dataframe(view.rename(columns={"rank": "#", "country": "Country", "region": "Region", "share": "Share", "tourist_share": "Overnight",
+                                              "growth_23_25": "Jan–Aug 23→25", "summer_ratio": "Summer / rest", "peak_month": "Peak",
+                                              "top_barrio": "First neighbourhood", "distinctive_barrio": "Most over-represented",
+                                              "distinctive_lq": "LQ", "overlap_int_top10": "Top-10 overlap"}),
+                         hide_index=True, width="stretch", height=380,
+                         column_config={"Share": st.column_config.NumberColumn(format="percent"),
+                                        "Overnight": st.column_config.NumberColumn(format="percent"),
+                                        "Jan–Aug 23→25": st.column_config.NumberColumn(format="percent"),
+                                        "Summer / rest": st.column_config.NumberColumn(format="%.2f"),
+                                        "LQ": st.column_config.NumberColumn(format="%.2f")})
+        reg = i3.get("nat_regions")
+        if reg is not None:
+            st.markdown("**World regions, January–August share of international presences**")
+            fig = go.Figure()
+            for year, colour in [(2023, "#BDBDBD"), (2024, "#7F7F7F"), (2025, "#333333")]:
+                fig.add_bar(x=reg["region"], y=reg[f"share_jan_aug_{year}"], name=f"Jan–Aug {year}", marker={"color": colour},
+                            hovertemplate=f"%{{x}} · {year}: %{{y:.1%}}<extra></extra>")
+            fig.update_layout(barmode="group", bargap=0.25)
+            show(base_layout(fig, 340, "Share of international presences", ".0%"), "nat_regions")
 
 # ------------------------------------------------------------------------------------------------
 # Iteration 3: data quality - low-data neighbourhoods (I8) and validation log (2.2.2)
