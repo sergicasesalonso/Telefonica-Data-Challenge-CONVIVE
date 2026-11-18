@@ -181,7 +181,7 @@ with tab_q:
     if not no_visitors:
         with st.container(border=True):
             k = dd.kpis(tables, f)
-            view_header("Q3 · Who visits? Unique visitors and their composition",
+            view_header("Q3 · Who visits? " + ("Presences in the selected area" if f.has_area else "Unique visitors") + " and their composition",
                         "regional visitors are always excursionists by definition, which raises the excursionist share.")
             if k is None:
                 st.info("No visitor data for this selection.")
@@ -194,7 +194,10 @@ with tab_q:
                     column.metric(f"{origin} share", f"{value:.1%}" if value is not None else "not selected")
                 columns[4].metric("Tourist share", f"{k['tourist_share']:.1%}")
                 if not k["single_month"]:
-                    st.caption("Several months are selected, so the first tile is the monthly average from T1. Monthly unique visitors are not summed. Shares are within the current selection.")
+                    st.caption("Several months are selected, so the first tile is a monthly average, never a sum of months. "
+                               + ("With an area selected it comes from T4 and counts presences (a person in two selected neighbourhoods counts twice). "
+                                  if f.has_area else "It comes from T1 (city unique visitors). ")
+                               + "Shares are within the current selection.")
                 segments = dd.segments_by_month(tables, f)
                 fig = go.Figure()
                 for (origin, tipo), g in segments.groupby(["origen", "tipo_visitante"], sort=False):
@@ -344,14 +347,7 @@ with tab_q:
 # ------------------------------------------------------------------------------------------------
 # Iteration 3 (4.2.2): research answers with their decision rule and verdict
 # ------------------------------------------------------------------------------------------------
-VERDICT_ICON = {"true": "✅", "false": "❌", "partly": "◐"}
-
-
-def verdict_kind(text):
-    low = text.lower()
-    if low.startswith(("no", "not", "partly", "different", "fewer", "moderate", "mixed")) or "false city-wide" in low:
-        return "partly" if low.startswith(("partly", "moderate", "true in")) else "false"
-    return "true"
+HOLDS_ICON = {"Yes": "✅ Yes", "No": "❌ No", "Partly": "◐ Partly"}
 
 
 with tab_rq:
@@ -363,16 +359,17 @@ with tab_rq:
         st.markdown('<div class="limit">Business Manager feedback of 9 Nov: every question must be quantified with an explicit threshold. '
                     'The rule decides the verdict, not the number. Q1–Q6 were shown at the Iteration 2 demo; Q7–Q17 are new in Iteration 3.</div>',
                     unsafe_allow_html=True)
-        counts = answers["verdict"].map(verdict_kind).value_counts()
+        counts = answers["belief_holds"].value_counts()
         a, b, c, d = st.columns(4)
         a.metric("Questions answered", f"{len(answers)} of {len(answers)}")
-        b.metric("Belief confirmed", int(counts.get("true", 0)))
-        c.metric("Belief refuted", int(counts.get("false", 0)))
-        d.metric("Partly / nuanced", int(counts.get("partly", 0)))
-        overview = answers[["id", "belief", "verdict"]].rename(columns={"id": "ID", "belief": "Common belief", "verdict": "Verdict from the data"})
-        overview.insert(2, " ", answers["verdict"].map(lambda v: VERDICT_ICON[verdict_kind(v)]))
+        b.metric("Belief holds", int(counts.get("Yes", 0)))
+        c.metric("Belief does not hold", int(counts.get("No", 0)))
+        d.metric("Partly", int(counts.get("Partly", 0)))
+        overview = answers[["id", "belief", "belief_holds", "verdict"]].rename(
+            columns={"id": "ID", "belief": "Common belief", "belief_holds": "Holds?", "verdict": "Verdict from the data (decision rule applied)"})
+        overview["Holds?"] = overview["Holds?"].map(HOLDS_ICON)
         st.dataframe(overview, hide_index=True, width="stretch", height=640,
-                     column_config={"ID": st.column_config.TextColumn(width=45), " ": st.column_config.TextColumn(width=30),
+                     column_config={"ID": st.column_config.TextColumn(width=45), "Holds?": st.column_config.TextColumn(width=85),
                                     "Common belief": st.column_config.TextColumn(width=330)})
         st.divider()
         options = [f"{r.id} · {r.question}" for r in answers.itertuples()]
@@ -383,7 +380,13 @@ with tab_rq:
             st.markdown(f"**Belief tested:** “{row['belief']}”  \n**Data:** {row['data']} · **Metric:** {row['metric']}")
             st.info(f"**Decision rule.** {row['decision_rule']}")
             st.markdown(f"**Answer.** {row['answer']}")
-            st.success(f"**Verdict: {row['verdict']}**") if verdict_kind(row["verdict"]) == "true" else st.warning(f"**Verdict: {row['verdict']}**")
+            message = f"**Verdict: {row['verdict']}.** Does the belief hold? **{row['belief_holds']}**"
+            if row["belief_holds"] == "Yes":
+                st.success(message)
+            elif row["belief_holds"] == "No":
+                st.error(message)
+            else:
+                st.warning(message)
             st.markdown(f'<div class="limit">Limitation: {row["limitation"]}</div>', unsafe_allow_html=True)
             figure = {"Q1": "q1_concentration", "Q2": "q2_seasonality", "Q3": "q3_origin_countries", "Q4": "q4_weekend_barrios",
                       "Q5": "q5_growth", "Q6": "q6_tourist_barris", "Q7": "q7_nights", "Q8": "q8_rank_season", "Q9": "q9_unusual_days",
