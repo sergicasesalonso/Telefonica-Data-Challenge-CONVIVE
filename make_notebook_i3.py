@@ -30,7 +30,7 @@ The Business Manager asked on 9 Nov for research questions that are **precise an
 
 1. **2.2.1** builds the aggregated tables (countries, provinces, municipalities, profile, daily neighbourhood visitors, trips between neighbourhoods, coverage).
 2. **2.2.2** validates them (totals through two independent paths, unique visitors never summed, coverage, privacy threshold).
-3. **3.2.4 / 3.2.1-3.2.3** answer Q1-Q17. For every question: belief → question → metric → **decision rule fixed in advance** → answer → verdict → limitation.
+3. **3.2.4 / 3.2.1-3.2.3** answer Q1-Q20. For every question: belief → question → metric → **decision rule fixed in advance** → answer → verdict → limitation.
 4. **I8** explains the low-data neighbourhoods.
 
 **Rules (NDA).** Outputs show only aggregated values; any count below 15 reads `<15`. Trips and unique visitors are never combined; unique visitors are never summed into people (sums across neighbourhoods are called *presences*). The results describe patterns, not causes."""),
@@ -86,6 +86,15 @@ answers[["id", "belief", "verdict"]]"""),
     *question("Q13"),
     *question("Q14", "q14_profile.png"),
     *question("Q17", "q17_country_growth.png"),
+    md("""### 3.2b Nationalities of international visitors (3.2.1, T8)
+
+Every country of residence with its share, overnight share, growth, season and neighbourhoods (`nationalities.py`)."""),
+    code("""r["nationalities"].head(20).round(3)"""),
+    code("""r["regions"].round(3)"""),
+    code("""Image(filename=str(R.OUT / "figures" / "nat_markets.png"))"""),
+    *question("Q20"),
+    *question("Q18", "nat_season_heatmap.png"),
+    *question("Q19", "nat_lq_maps.png"),
     md("""### 3.3 Where (3.2.2 geographic analysis)"""),
     *question("Q16"),
     *question("Q8", "q8_rank_season.png"),
