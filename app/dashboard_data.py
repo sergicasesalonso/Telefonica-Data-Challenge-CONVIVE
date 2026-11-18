@@ -1,6 +1,7 @@
 """Data logic of the CONVIVE dashboard (no Streamlit here, so it can be tested on its own).
 
-Reads ONLY deliverables/iteration2/3.1.6_stats/*.csv. Rules enforced here:
+Reads ONLY aggregated tables: deliverables/iteration2/3.1.6_stats/*.csv and, since Iteration 3 (WBS 4.2.3), the daily
+neighbourhood table of deliverables/iteration3/2.2.1_aggregates/. Rules enforced here:
   - unique visitors are never summed across months: a period is a monthly mean;
   - segments (origin, visitor type) inside one month and place are exclusive, so they can be added;
   - neighbourhood values are never added up to a city total;
@@ -15,6 +16,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 STATS_DIR = ROOT / "deliverables" / "iteration2" / "3.1.6_stats"
+AGG_DIR = ROOT / "deliverables" / "iteration3" / "2.2.1_aggregates"
+DAY_TYPES = ["All days", "Weekdays (Mon-Fri)", "Weekends (Sat-Sun)"]
 
 VISITOR_ORIGINS = ["Internacional", "Nacional", "Regional"]
 TRIP_ORIGINS = VISITOR_ORIGINS + ["Residente"]
@@ -32,10 +35,53 @@ class Filters:
     month_to: int
     origins: list
     types: list
+    day_type: str = "All days"      # 4.2.3: applies to the daily views (Q4) and to trips (Q6)
+    area: list = None               # 4.2.3: selected neighbourhood codes (from the district and neighbourhood filters); None = city
 
     @property
     def visitor_origins(self):
         return [o for o in self.origins if o in VISITOR_ORIGINS]
+
+    @property
+    def has_area(self):
+        return bool(self.area)
+
+
+def area_codes(lookup, districts, barrios):
+    """Neighbourhood codes selected by the district and neighbourhood filters. None means the whole city."""
+    if barrios:
+        return sorted(lookup.loc[lookup["barrio_name"].isin(barrios), "cod_barrio"])
+    if districts:
+        return sorted(lookup.loc[lookup["distrito_name"].isin(districts), "cod_barrio"])
+    return None
+
+
+def barrio_lookup(tables):
+    return tables["barrio_monthly"][["cod_barrio", "barrio_name", "distrito_name"]].drop_duplicates().sort_values(["distrito_name", "barrio_name"])
+
+
+def _area(df, f):
+    return df[df["cod_barrio"].isin(f.area)] if f.has_area else df
+
+
+def _days(df, f):
+    if f.day_type == DAY_TYPES[1]:
+        return df[~df["is_weekend"]]
+    if f.day_type == DAY_TYPES[2]:
+        return df[df["is_weekend"]]
+    return df
+
+
+def _monthly_source(tables, f):
+    """City (T1, people) or selected neighbourhoods (T4, presences: a person in two selected neighbourhoods counts twice)."""
+    if f.has_area:
+        df = _area(tables["barrio_monthly"], f).dropna(subset=["visitantes"])
+        return df.groupby(["mes", "year", "month", "origen", "tipo_visitante"], as_index=False)["visitantes"].sum()
+    return tables["city_monthly"]
+
+
+def measure_label(f):
+    return "presences in the selected area" if f.has_area else "unique visitors"
 
 
 def to_number(series):
@@ -51,6 +97,16 @@ def load_tables(stats_dir=STATS_DIR):
         "barrio_monthly": pd.read_csv(stats_dir / "barrio_monthly_by_origin_type.csv", dtype=text),
         "trips": pd.read_csv(stats_dir / "barrio_incoming_trips_by_origen.csv", dtype=text),
     }
+    t5_path = AGG_DIR / "t5_barrio_daily_by_origin.csv"
+    if t5_path.exists():
+        tables["t5"] = pd.read_csv(t5_path, dtype=text, parse_dates=["date"])
+        tables["t5"]["visitantes"] = to_number(tables["t5"]["visitantes"])
+        tables["t5"]["is_weekend"] = tables["t5"]["is_weekend"].astype(str).str.lower() == "true"
+        tables["t5"]["year"] = tables["t5"]["date"].dt.year
+        tables["t5"]["month"] = tables["t5"]["date"].dt.month
+    for key in ("city_daily", "trips"):
+        if tables[key]["is_weekend"].dtype == object:
+            tables[key]["is_weekend"] = tables[key]["is_weekend"].astype(str).str.lower() == "true"
     tables["city_monthly"]["visitantes"] = to_number(tables["city_monthly"]["visitantes"])
     tables["city_daily"]["visitantes"] = to_number(tables["city_daily"]["visitantes"])
     tables["barrio_monthly"]["visitantes"] = to_number(tables["barrio_monthly"]["visitantes"])
@@ -75,7 +131,7 @@ def incomplete_months(tables, f):
 # Q3 --------------------------------------------------------------------------------------------
 def kpis(tables, f):
     """Visitors from T1. One month: its value. Several months: the monthly mean, never the sum."""
-    df = _visitors(tables["city_monthly"], f)
+    df = _visitors(_monthly_source(tables, f), f)
     if df.empty:
         return None
     n_months = df["mes"].nunique()
@@ -88,14 +144,14 @@ def kpis(tables, f):
 
 
 def segments_by_month(tables, f):
-    df = _visitors(tables["city_monthly"], f)
+    df = _visitors(_monthly_source(tables, f), f)
     return df[["mes", "year", "month", "origen", "tipo_visitante", "visitantes"]].sort_values(["mes", "origen", "tipo_visitante"])
 
 
 # Q2 --------------------------------------------------------------------------------------------
 def monthly_evolution(tables, f):
     """One row per selected calendar month and origin. Months outside the selection are NaN, so lines break."""
-    df = _visitors(tables["city_monthly"], f)
+    df = _visitors(_monthly_source(tables, f), f)
     if df.empty:
         return df
     values = df.groupby(["mes", "origen"])["visitantes"].sum().unstack("origen")
@@ -132,7 +188,7 @@ def equivalent_months(tables, f):
 
 def yoy_city(tables, f):
     months = equivalent_months(tables, f)
-    df = _visitors(tables["city_monthly"], f)
+    df = _visitors(_monthly_source(tables, f), f)
     df = df[df["month"].isin(months)]
     if df.empty:
         return df, months
@@ -145,7 +201,7 @@ def yoy_city(tables, f):
 def yoy_barrio(tables, f):
     """Change in mean monthly visitors per neighbourhood: first against last selected year, equivalent months."""
     months = equivalent_months(tables, f)
-    df = _visitors(tables["barrio_monthly"], f)
+    df = _area(_visitors(tables["barrio_monthly"], f), f)
     df = df[df["month"].isin(months)].dropna(subset=["visitantes"])
     if df.empty:
         return df, None, None
@@ -160,8 +216,17 @@ def yoy_barrio(tables, f):
 
 
 # Q4 --------------------------------------------------------------------------------------------
+def _daily_source(tables, f):
+    """City (T2) or selected neighbourhoods (T5, presences). T5 has no visitor type: the type filter cannot apply there."""
+    if f.has_area and "t5" in tables:
+        df = _area(tables["t5"], f)
+        df = _period(df, f)[lambda d: d["origen"].isin(f.visitor_origins)]
+        return _days(df.dropna(subset=["visitantes"]), f)
+    return _days(_visitors(tables["city_daily"], f), f)
+
+
 def weekday_pattern(tables, f):
-    df = _visitors(tables["city_daily"], f)
+    df = _daily_source(tables, f)
     if df.empty:
         return df
     per_day = df.groupby(["date", "weekday_idx", "weekday", "origen"])["visitantes"].sum().reset_index()
@@ -171,7 +236,9 @@ def weekday_pattern(tables, f):
 
 
 def weekend_difference(tables, f):
-    df = _visitors(tables["city_daily"], f)
+    if f.day_type != DAY_TYPES[0]:
+        return {}
+    df = _daily_source(tables, f)
     if df.empty:
         return {}
     per_day = df.groupby(["date", "is_weekend", "origen"])["visitantes"].sum().reset_index()
@@ -184,7 +251,7 @@ def weekend_difference(tables, f):
 # Q1 --------------------------------------------------------------------------------------------
 def barrio_values(tables, f):
     """Monthly mean of unique visitors per neighbourhood. Not additive across neighbourhoods."""
-    df = _visitors(tables["barrio_monthly"], f).dropna(subset=["visitantes"])
+    df = _area(_visitors(tables["barrio_monthly"], f), f).dropna(subset=["visitantes"])
     if df.empty:
         return df
     per_month = df.groupby(["mes", "cod_barrio", "barrio_name", "distrito_name"])["visitantes"].sum().reset_index()
@@ -209,7 +276,7 @@ def concentration(values):
 def trip_share(tables, f):
     """Share of incoming trips made by the selected origins, over all four origins. Trips, not people.
     M1 has no visitor type, so the visitor-type filter cannot apply to this view."""
-    df = _period(tables["trips"], f)
+    df = _area(_days(_period(tables["trips"], f), f), f)
     if df.empty or not f.origins:
         return pd.DataFrame()
     keys = ["cod_barrio", "barrio_name", "distrito_name"]
