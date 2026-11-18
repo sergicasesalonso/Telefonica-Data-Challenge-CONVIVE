@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import nationalities as N
+
 HERE = Path(__file__).resolve().parent
 STATS = HERE / "deliverables" / "iteration2" / "3.1.6_stats"
 AGG = HERE / "deliverables" / "iteration3" / "2.2.1_aggregates"
@@ -89,6 +91,20 @@ THRESHOLDS = {
     "Q17": {"rule": "A country market is GROWING FAST if its January-August presences grew by more than 20% between 2023 "
                     "and 2025. Only countries with at least 1% of international presences in 2023 are ranked.",
             "fast": 0.20, "min_share": 0.01},
+    # Q18-Q20 (nationalities, added 18 Nov) reuse thresholds already fixed above: 1.30 (Q2), 7 of 10 and LQ 1.25 (Q10), 50% (Q3).
+    "Q18": {"rule": "A country market is a SUMMER MARKET if its June-August monthly mean is at least 1.30 times the mean of the "
+                    "other nine months (the Q2 threshold, full years 2023 and 2024). The belief holds if at least 16 of the 20 main "
+                    "markets (80%) are summer markets; PARTLY if 10 to 15; NO if fewer than 10.",
+            "strong": 1.30, "markets": 20, "holds": 16, "partly": 10},
+    "Q19": {"rule": "A country market FOLLOWS the international pattern if at least 7 of its top-10 neighbourhoods are in the top 10 "
+                    "of all international visitors (the Q10 threshold). It has its OWN NICHE if a neighbourhood with at least 1,000 "
+                    "presences per month of that market has a location quotient >= 1.25. The belief holds if at least 16 of the 20 "
+                    "main markets follow the pattern and fewer than half have a niche; PARTLY if they follow it but at least half "
+                    "have a niche; NO if fewer than 16 follow it.",
+            "overlap": 7, "lq": 1.25, "markets": 20, "holds": 16},
+    "Q20": {"rule": "A country market is MOSTLY OVERNIGHT if overnight tourists ('Turista') are at least 50% of its presences (T8). "
+                    "The belief holds if at least 16 of the 20 main markets are mostly overnight; PARTLY if 10 to 15; NO if fewer than 10.",
+            "share": 0.50, "markets": 20, "holds": 16, "partly": 10},
 }
 
 AMB_MUNICIPALITIES = [
@@ -357,6 +373,65 @@ def q17(t):
               f"2023 to 2025): " + ", ".join(f"{r.country} {signed(r.change_2023_2025)}" for r in fast.head(6).itertuples())
               + f". Lowest: " + ", ".join(f"{r.country} {signed(r.change_2023_2025)}" for r in keep.tail(3).itertuples()) + ".")
     return {"id": "Q17", "table": keep, "answer": answer, "verdict": f"{len(fast)} fast-growing markets", "value": len(fast)}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Q18-Q20 · nationalities of international visitors (nationalities.py)
+# ---------------------------------------------------------------------------------------------------------------
+def _three_way(n, rule):
+    return "Yes" if n >= rule["holds"] else ("Partly" if n >= rule["partly"] else "No")
+
+
+def q18(t, prof):
+    rule = THRESHOLDS["Q18"]
+    main = prof.head(rule["markets"])
+    summer = main[main["summer_ratio"] >= rule["strong"]]
+    off = main.sort_values("summer_ratio").head(5)
+    n = len(summer)
+    answer = (f"{n} of the {rule['markets']} main markets are summer markets (June-August >= 1.30x the other months): "
+              + ", ".join(f"{r.country} {r.summer_ratio:.2f}x" for r in summer.sort_values("summer_ratio", ascending=False).itertuples())
+              + ". The least seasonal markets peak outside summer: "
+              + ", ".join(f"{r.country} {r.summer_ratio:.2f}x (peak {r.peak_month})" for r in off.itertuples())
+              + f". The 20 markets hold {pct(main['share'].sum())} of international presences.")
+    verdict = {"Yes": "Most markets are summer markets", "Partly": "About half of the markets are summer markets",
+               "No": f"Only {n} of {rule['markets']} markets are summer markets"}[_three_way(n, rule)]
+    return {"id": "Q18", "answer": answer, "verdict": verdict, "value": n, "table": main}
+
+
+def q19(t, prof):
+    rule = THRESHOLDS["Q19"]
+    main = prof.head(rule["markets"])
+    follow = int((main["overlap_int_top10"] >= rule["overlap"]).sum())
+    niche = main[main["n_barrios_lq_125"] > 0].sort_values("distinctive_lq", ascending=False)
+    first_name, first_n = main["top_barrio"].value_counts().index[0], int(main["top_barrio"].value_counts().iloc[0])
+    answer = (f"{follow} of the {rule['markets']} main markets share at least 7 of their top-10 neighbourhoods with all international "
+              f"visitors ({first_name} is first for {first_n} of them). "
+              f"{len(niche)} of {rule['markets']} also have their own niche (LQ >= 1.25 with >= 1,000 presences per month): "
+              + ", ".join(f"{r.country} in {r.distinctive_barrio} ({r.distinctive_lq:.2f})" for r in niche.head(6).itertuples()) + ".")
+    if follow < rule["holds"]:
+        holds, verdict = "No", "Markets go to different places"
+    elif len(niche) >= rule["markets"] / 2:
+        holds, verdict = "Partly", "Same main neighbourhoods for every market, plus a niche of their own for most"
+    else:
+        holds, verdict = "Yes", "Same neighbourhoods for every market"
+    return {"id": "Q19", "answer": answer, "verdict": verdict, "value": follow, "holds_rule": holds, "table": main}
+
+
+def q20(t, prof):
+    rule = THRESHOLDS["Q20"]
+    main = prof.head(rule["markets"])
+    n = int((main["tourist_share"] >= rule["share"]).sum())
+    low = main.sort_values("tourist_share").head(4)
+    wider = prof.head(50)
+    day = wider[wider["tourist_share"] < rule["share"]]
+    answer = (f"{n} of the {rule['markets']} main markets are mostly overnight tourists. Highest share of overnight tourists: "
+              + ", ".join(f"{r.country} {pct(r.tourist_share)}" for r in main.sort_values("tourist_share", ascending=False).head(3).itertuples())
+              + "; lowest: " + ", ".join(f"{r.country} {pct(r.tourist_share)}" for r in low.itertuples()) + ". "
+              + (f"Among the top 50 countries, mostly day-trippers: " + ", ".join(f"{r.country} {pct(r.tourist_share)}" for r in day.itertuples()) + "."
+                 if len(day) else "None of the top 50 countries is mostly day-trippers."))
+    verdict = {"Yes": "Mostly overnight tourists in every main market", "Partly": "Mostly overnight in part of the markets",
+               "No": "Most markets are mostly day-trippers"}[_three_way(n, rule)]
+    return {"id": "Q20", "answer": answer, "verdict": verdict, "value": n, "table": main}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -714,6 +789,9 @@ def belief_holds(qid, res):
         "Q15": "Yes" if verdict.startswith("same") else "No",
         "Q16": "Yes" if v >= THRESHOLDS["Q16"]["gap"] else "No",
         "Q17": "No" if v > 0 else "Yes",
+        "Q18": _three_way(v, THRESHOLDS["Q18"]) if "Q18" in qid else None,
+        "Q19": res.get("holds_rule"),
+        "Q20": _three_way(v, THRESHOLDS["Q20"]) if "Q20" in qid else None,
     }
     return rules[qid]
 
@@ -738,8 +816,13 @@ def run_all(t=None):
     r["Q15"] = q15(t)
     r["Q16"] = q16(t, r["Q1"])
     r["Q17"] = q17(t)
+    r["nationalities"] = N.profile(t)
+    r["regions"] = N.region_table(t)
+    r["Q18"] = q18(t, r["nationalities"])
+    r["Q19"] = q19(t, r["nationalities"])
+    r["Q20"] = q20(t, r["nationalities"])
     r["low_data"], r["low_data_median"] = low_data(t)
-    for qid in [k for k in r if k.startswith("Q")]:
+    for qid in [k for k in r if k[0] == "Q" and k[1:].isdigit()]:
         r[qid]["holds"] = belief_holds(qid, r[qid])
     return t, r
 
