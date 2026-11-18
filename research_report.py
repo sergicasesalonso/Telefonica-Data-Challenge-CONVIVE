@@ -3,7 +3,7 @@
     python research_report.py
 
 Writes to deliverables/iteration3/:
-    3.2.0_ResearchQuestions_v0.3.md        questions with metric, decision rule, answer and limit (Q1-Q17)
+    3.2.0_ResearchQuestions_v0.3.md        questions with metric, decision rule, answer and limit (Q1-Q20)
     3.2.4_quantified_answers.md / .csv     question -> metric -> threshold -> answer -> verdict table (Q1-Q6 + Q7-Q17)
     3.2.1_exploratory_analysis.md          who and where from: Q3 countries, Q11-Q14, Q17
     3.2.2_geographic_analysis.md           where: Q1, Q6, Q8, Q10, Q16 and the low-data neighbourhoods (I8)
@@ -77,7 +77,19 @@ QUESTIONS = {
             "N50 (see Q1) by visitor type", "Same as Q1."),
     "Q17": ("The tourist mix is always the same countries.", "Which country markets grew more than 20% (January-August 2023->2025)?", "T8",
             "Change in January-August presences per country with at least 1% of presences", "Presences, not people; equivalent months only."),
+    "Q18": ("Foreign tourists all come in summer.", "Are at least 16 of the 20 main country markets summer markets (June-August >= 1.30x the other months)?",
+            "T8", "June-August / other nine months per country (full years 2023-2024); seasonal index per month; peak and lowest month",
+            "Presences, not people; small countries grouped as NA are left out."),
+    "Q19": ("Every nationality goes to the same neighbourhoods.", "Do the 20 main markets share at least 7 of their top-10 neighbourhoods, and do they have niches of their own?",
+            "T8", "Overlap of each market's top 10 with the international top 10; location quotient (LQ) per neighbourhood with a base of 1,000 presences per month",
+            "Neighbourhood x country values exist by year only (no visitor type); LQ uses presences."),
+    "Q20": ("International visitors are overnight tourists.", "Are overnight tourists at least half of the presences in at least 16 of the 20 main markets?",
+            "T8", "Share of overnight tourists ('Turista') in each country's presences",
+            "Presences, not people; a person who is a tourist one month and an excursionist another counts in both."),
 }
+SHORT_NAMES = {"Vallvidrera, el Tibidabo i les Planes": "Vallvidrera-Tibidabo", "Sant Pere, Santa Caterina i la Ribera": "Sant Pere-la Ribera",
+               "la Vila Olímpica del Poblenou": "Vila Olímpica"}
+NAT_COLORS = {"Turista": "#0072B2", "Excursionista": "#56B4E9"}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -393,6 +405,104 @@ def fig_q17(t, r):
                 "Change in January-August presences (T8), countries with at least 1% of international presences in 2023.")
 
 
+def fig_nat_markets(t, r):
+    """Q20 and the main markets: share of international presences, split overnight / day trip."""
+    p = r["nationalities"].head(20).iloc[::-1]
+    fig, ax = plt.subplots(figsize=(10, 6.2))
+    tour = p["share"] * p["tourist_share"]
+    exc = p["share"] - tour
+    ax.barh(p["country"], tour, color=NAT_COLORS["Turista"], height=0.62, label="Overnight tourists", edgecolor="white", linewidth=1)
+    ax.barh(p["country"], exc, left=tour, color=NAT_COLORS["Excursionista"], height=0.62, label="Day-trippers (excursionists)",
+            edgecolor="white", linewidth=1, hatch="///")
+    for yy, row in enumerate(p.itertuples()):
+        ax.text(row.share + 0.002, yy, f"{row.share:.1%}  ·  {row.tourist_share:.0%} overnight  ·  {row.growth_23_25:+.0%} since 2023",
+                va="center", fontsize=8, color=INK)
+    style(ax)
+    ax.yaxis.grid(False)
+    ax.xaxis.grid(True, color=GRID)
+    ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1, decimals=0))
+    ax.set_xlim(0, p["share"].max() * 1.6)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.02))
+    ax.tick_params(axis="y", labelsize=9)
+    ax.legend(loc="lower right", frameon=False, fontsize=9)
+    ax.set_xlabel("Share of international presences, Jan 2023-Aug 2025 (growth: January-August 2023->2025)", color=MUTED, fontsize=9)
+    return save(fig, "nat_markets.png", f"Nationalities · the 20 main markets hold {r['nationalities'].head(20)['share'].sum():.0%} of international presences",
+                "T8, country of residence. Every main market is mostly overnight tourists (Q20); France and Korea have the most day-trippers.")
+
+
+def fig_nat_season(t, r):
+    """Q18: seasonal index per country and month (mean month = 100)."""
+    import nationalities as N
+    p = r["nationalities"].head(20).sort_values("summer_ratio", ascending=False)
+    idx = N.seasonal_index(t, p["country"].tolist())
+    fig, ax = plt.subplots(figsize=(10.5, 7.2))
+    norm = mcolors.TwoSlopeNorm(vmin=50, vcenter=100, vmax=150)
+    im = ax.imshow(idx.values, cmap="RdBu_r", norm=norm, aspect="auto")
+    for i in range(idx.shape[0]):
+        for j in range(idx.shape[1]):
+            v = idx.values[i, j]
+            ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=7.5, color="white" if abs(v - 100) > 32 else INK)
+    ax.set_xticks(range(12), R.MONTHS_EN, fontsize=9)
+    labels = [f"{c}  ({x:.2f}x){'  ●' if x >= 1.30 else ''}" for c, x in zip(p["country"], p["summer_ratio"])]
+    ax.set_yticks(range(len(p)), labels, fontsize=8.5)
+    ax.add_patch(matplotlib.patches.Rectangle((4.5, -0.5), 3, len(p), fill=False, edgecolor=INK, linewidth=1.6))
+    ax.tick_params(length=0)
+    for side in ax.spines.values():
+        side.set_visible(False)
+    cb = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.02)
+    cb.set_label("Index (mean month of the country = 100)", color=MUTED, fontsize=9)
+    n = r["Q18"]["value"]
+    return save(fig, "nat_season_heatmap.png", f"Q18 · Only {n} of the 20 main markets are summer markets; Asian markets peak in autumn and winter",
+                "Monthly index per country, mean of 2023 and 2024. Box: June-August. In brackets: summer / other months; ● = summer market (>= 1.30).")
+
+
+def fig_nat_maps(t, r):
+    """Q19: where each nationality is over-represented (LQ), six markets."""
+    import nationalities as N
+    lq = N.location_quotients(t)
+    countries = ["France", "United Kingdom", "United States", "Germany", "Korea S, Republic of", "China"]
+    fig, axes = plt.subplots(2, 3, figsize=(12, 8.4))
+    norm = mcolors.TwoSlopeNorm(vmin=0.3, vcenter=1, vmax=2.5)
+    prof = r["nationalities"].set_index("country")
+    for ax, c in zip(axes.flat, countries):
+        d = lq[(lq["country"] == c) & lq["reliable"]]
+        geo, values = map_values(dict(zip(d["cod_barrio"], d["lq"].clip(upper=2.5))))
+        cv.plot_map(geo, values, ax=ax, cmap="RdBu_r", norm=norm, colorbar=False)
+        row = prof.loc[c]
+        name = "South Korea" if c.startswith("Korea") else c
+        niche = SHORT_NAMES.get(row["distinctive_barrio"], row["distinctive_barrio"])
+        ax.set_title(f"{name} · {row['share']:.1%} of presences\nmost over-represented: {niche} (LQ {row['distinctive_lq']:.2f})",
+                     fontsize=9.5, color=INK)
+    sm = matplotlib.cm.ScalarMappable(norm=norm, cmap="RdBu_r")
+    fig.colorbar(sm, ax=axes, shrink=0.55, pad=0.04, label="Location quotient (1 = mix of all international visitors)")
+    fig.text(0.01, 1.04, "Q19 · Every nationality shares the central neighbourhoods, but most have a niche of their own",
+             ha="left", fontsize=12.5, fontweight="bold", color=INK)
+    fig.text(0.01, 1.005, "Location quotient by neighbourhood (T8, mean 2023-2025). Red: over-represented. Grey: fewer than 1,000 presences per month of that country.",
+             fontsize=9.5, color=MUTED)
+    fig.text(0.01, -0.01, SOURCE, fontsize=7.5, color=MUTED)
+    fig.savefig(FIG / "nat_lq_maps.png", dpi=170, facecolor="white", bbox_inches="tight")
+    plt.close(fig)
+
+
+def fig_nat_regions(t, r):
+    reg = r["regions"].iloc[::-1]
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    yy = np.arange(len(reg))
+    for k, (year, colour) in enumerate([(2023, "#BDBDBD"), (2024, "#7F7F7F"), (2025, "#333333")]):
+        ax.barh(yy + (k - 1) * 0.26, reg[f"share_jan_aug_{year}"], height=0.24, color=colour, label=f"Jan-Aug {year}")
+    for i, row in enumerate(reg.itertuples()):
+        ax.text(max(row.share_jan_aug_2023, row.share_jan_aug_2025) + 0.006, i, f"{row.growth_23_25:+.0%}", va="center", fontsize=8.5, color=INK)
+    ax.set_yticks(yy, reg["region"], fontsize=9)
+    style(ax)
+    ax.yaxis.grid(False)
+    ax.xaxis.grid(True, color=GRID)
+    ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1, decimals=0))
+    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    ax.set_xlabel("Share of international presences (labels: change in presences 2023->2025)", color=MUTED, fontsize=9)
+    return save(fig, "nat_regions.png", "Nationalities · Asia-Pacific (+76%) and Central-Eastern Europe (+66%) grow fastest; UK & Ireland fall",
+                "World regions of residence, January-August of each year (T8).")
+
+
 def fig_q8(t, r):
     year = 2024
     row = r["Q8"]["table"].query("year == @year").iloc[0]
@@ -465,7 +575,7 @@ def fig_low_data_map(t, r):
 
 def make_figures(t, r):
     for f in (fig_q1, fig_q2, fig_q3, fig_q4, fig_q5, fig_q6, fig_q7, fig_q8, fig_q9, fig_q10, fig_residence, fig_q14, fig_q15,
-              fig_q17, fig_low_data, fig_low_data_map):
+              fig_q17, fig_low_data, fig_low_data_map, fig_nat_markets, fig_nat_season, fig_nat_maps, fig_nat_regions):
         f(t, r)
         print(f"  figure: {f.__name__}", flush=True)
 
@@ -574,6 +684,33 @@ def q9_table(r):
     return "\n".join(lines)
 
 
+def nationality_md(r):
+    p = r["nationalities"].head(20)
+    rows = "\n".join(f"| {x.rank} | {x.country} | {x.region} | {x.share:.1%} | {x.tourist_share:.0%} | {x.growth_23_25:+.0%} | {x.summer_ratio:.2f} | "
+                     f"{x.peak_month} | {x.top_barrio} | {x.distinctive_barrio} ({x.distinctive_lq:.2f}) |" for x in p.itertuples())
+    reg = "\n".join(f"| {x.region} | {x.share_jan_aug_2023:.1%} | {x.share_jan_aug_2024:.1%} | {x.share_jan_aug_2025:.1%} | {x.growth_23_25:+.0%} |"
+                     for x in r["regions"].itertuples())
+    return f"""Country of residence of international visitors (T8), {len(r['nationalities'])} named countries. Shares are of presences
+(person x neighbourhood); countries below 15 people in a neighbourhood are grouped as NA by Telefónica and left out of the denominator.
+The full table, with every indicator for every country, is `3.2.1_nationality_profile.csv`.
+
+**The 20 main markets** ({p['share'].sum():.1%} of international presences):
+
+| # | Country | Region | Share | Overnight | Jan-Aug 2023->2025 | Summer / rest | Peak month | First neighbourhood | Most over-represented (LQ) |
+|---|---|---|---|---|---|---|---|---|---|
+{rows}
+
+**World regions** (January-August, share of international presences):
+
+| Region | 2023 | 2024 | 2025 | Change 2023->2025 |
+|---|---|---|---|---|
+{reg}
+
+![Main markets](figures/nat_markets.png)
+
+![Regions](figures/nat_regions.png)"""
+
+
 def pct_fmt(x):
     return f"{x:.0%}"
 
@@ -587,17 +724,20 @@ def write_all(t, r):
     r["Q9"]["peaks"].to_csv(R.OUT / "3.2.3_unusual_days.csv", index=False)
     r["Q10"]["table"].to_csv(R.OUT / "3.2.2_location_quotients.csv", index=False)
     r["Q17"]["table"].to_csv(R.OUT / "3.2.1_country_growth.csv", index=False)
+    r["nationalities"].to_csv(R.OUT / "3.2.1_nationality_profile.csv", index=False)
+    r["regions"].to_csv(R.OUT / "3.2.1_world_regions.csv", index=False)
     summary = {k: {"verdict": v["verdict"], "answer": v["answer"], "value": v["value"]} for k, v in r.items() if isinstance(v, dict)}
     (R.OUT / "3.2.4_summary.json").write_text(pd.Series(summary).to_json(indent=1, force_ascii=False), encoding="utf-8")
 
     figures = {"Q1": "q1_concentration.png", "Q2": "q2_seasonality.png", "Q3": "q3_origin_countries.png", "Q4": "q4_weekend_barrios.png",
                "Q5": "q5_growth.png", "Q6": "q6_tourist_barris.png", "Q7": "q7_nights.png", "Q8": "q8_rank_season.png",
                "Q9": "q9_unusual_days.png", "Q10": "q10_lq_maps.png", "Q12": "q12_q13_residence.png", "Q14": "q14_profile.png",
-               "Q15": "q15_rhythm.png", "Q17": "q17_country_growth.png"}
+               "Q15": "q15_rhythm.png", "Q17": "q17_country_growth.png",
+               "Q18": "nat_season_heatmap.png", "Q19": "nat_lq_maps.png", "Q20": "nat_markets.png"}
     table_lines = ["| ID | Belief | Metric | Decision rule | Answer | Verdict | Belief holds? |", "|---|---|---|---|---|---|---|"]
     for row in answers.itertuples():
         table_lines.append(f"| {row.id} | {row.belief} | {row.metric} | {row.decision_rule} | {row.answer} | **{row.verdict}** | {row.belief_holds} |")
-    write_md(R.OUT / "3.2.4_quantified_answers.md", "3.2.4 Quantified criteria and answers (Q1-Q6, plus Q7-Q17)",
+    write_md(R.OUT / "3.2.4_quantified_answers.md", "3.2.4 Quantified criteria and answers (Q1-Q6, plus Q7-Q20)",
              "Business Manager feedback of 9 Nov (I10): every question must be precise and quantified, with an explicit criterion so that the data can "
              "answer it. Each rule below was fixed in `research.THRESHOLDS` before the answer was computed. A change to a rule is a change request.",
              [("Question -> metric -> threshold -> answer", "\n".join(table_lines))] + [q_block(r, q, figures.get(q)) for q in ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]])
@@ -605,6 +745,8 @@ def write_all(t, r):
              "Questions about the visitors themselves, with the tourist focus asked for at the Iteration 2 demo: country of residence, province, municipality, profile and market growth.",
              [q_block(r, "Q11", "q3_origin_countries.png"), q_block(r, "Q12", "q12_q13_residence.png"), q_block(r, "Q13"),
               q_block(r, "Q14", "q14_profile.png"), q_block(r, "Q17", "q17_country_growth.png"),
+              ("Nationalities of international visitors in detail", nationality_md(r)),
+              q_block(r, "Q20", "nat_markets.png"), q_block(r, "Q18", "nat_season_heatmap.png"), q_block(r, "Q19", "nat_lq_maps.png"),
               ("Data limits found", "- T9 has no international visitors (I9), so the profile covers national and regional visitors only.\n"
                "- Country, province and municipality shares are shares of presences (person x neighbourhood). The largest single neighbourhood value is a lower bound of people.\n"
                "- M3 (trips from municipalities to neighbourhoods) still has 43.7% repeated keys (I7); Q13 uses T6 only until the BM answers.")])
@@ -625,11 +767,12 @@ def write_all(t, r):
         rq.append(f"| {row.id} | {row.belief} | {row.question} | {row.data} | {row.metric} | {row.decision_rule} | {row.verdict} | {row.belief_holds} |")
     write_md(R.OUT / "3.2.0_ResearchQuestions_v0.3.md", "CONVIVE Research Questions v0.3 (WBS 3.2.0)",
              "v0.3 applies the Business Manager feedback of 9 Nov (I10, change C12): every question now states a metric and an explicit threshold, "
-             "Q3 adds the breakdown by country of residence, and Q16-Q17 add more concrete questions about tourists. Validation by the BM is pending.",
+             "Q3 adds the breakdown by country of residence, Q16-Q17 add more concrete questions about tourists, and Q18-Q20 analyse the "
+             "nationalities of international visitors (season, neighbourhoods, overnight vs day trip). Validation by the BM is pending.",
              [("Questions", "\n".join(rq)),
               ("Version history", "| Version | Date | Change |\n|---|---|---|\n| v0.1 | 5 Nov 2026 | 15 questions, Q1-Q6 for the 9 Nov demo |\n"
                "| v0.2 | 8 Nov 2026 | One-page version of Q1-Q6 for the professor |\n"
-               "| v0.3 | 18 Nov 2026 | Metric and decision rule for every question; Q3 by country (T8); new tourist questions Q16-Q17; low-data neighbourhoods (I8) |")])
+               "| v0.3 | 18 Nov 2026 | Metric and decision rule for every question; Q3 by country (T8); new tourist questions Q16-Q17; low-data neighbourhoods (I8); nationalities Q18-Q20 |")])
 
 
 def main():
