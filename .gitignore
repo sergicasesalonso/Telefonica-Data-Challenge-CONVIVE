@@ -11,5 +11,10 @@ deliverables/iteration2/3.1.6_stats/*.csv
 deliverables/iteration2/3.1.6_summary.json
 deliverables/iteration2/*.html
 deliverables/iteration2/screenshots/
-deliverables/iteration3/2.2.1_aggregates
-.gitignore
+# Iteration 3: aggregated tables and figures built from NDA data. Regenerate them; decide deliberately before sharing
+deliverables/iteration3/2.2.1_aggregates/*
+deliverables/iteration3/**/*.csv
+deliverables/iteration3/**/*.json
+deliverables/iteration3/**/*.png
+deliverables/iteration3/**/*.html
+!deliverables/iteration3/**/README.md
