@@ -261,10 +261,20 @@ def write_limitations(rob, shifts, extra):
     lines += md_table(show) + [""]
     lines += ["## Level shifts in the neighbourhood series (extends I8)", "", f"*Rule:* {B.RULE_TEXT}", "",
               f"{len(found)} shifts in {found['barrio_name'].nunique()} of 73 neighbourhoods, {int((found['distrito_name'] == 'Nou Barris').sum())} of them "
-              "in Nou Barris. Iteration 3 reported Verdun as the only break; the scan of all the neighbourhoods corrects that. Verdun falls in both products in August 2023, but M1 recovers in two months while T4 stays low; in el Turó de la Peira and la Font de la Guatlla both products rise together, which could be real. The scan cannot tell one case from the other.", ""]
+              "in Nou Barris. Iteration 3 reported Verdun as the only break; the scan of all the neighbourhoods corrects that. Verdun falls in both products in August 2023, but M1 recovers in two months while T4 stays low; in la Font de la Guatlla both products rise together, which could be real. The scan cannot tell one case from the other.", ""]
     table = found[["barrio_name", "distrito_name", "product", "month", "ratio"]].copy()
     table["ratio"] = table["ratio"].map("{:.2f}".format)
     lines += md_table(table) + [""]
+    pair = shifts["pair"].copy()
+    lines += ["### Can Peguera and el Turó de la Peira: evidence of a change of zones in April 2024", "",
+              "These two neighbourhoods are next to each other and shift in the same month in opposite directions, for visitors and for residents "
+              "alike. Together they change much less (means of the six months before and after). Real visitors and residents would hardly swap "
+              "neighbourhoods overnight; a change in how the network areas are assigned would do exactly this. It is the most concrete evidence "
+              "we can give Telefónica for I8.", ""]
+    for c in ("before", "after"):
+        pair[c] = pair[c].map(R.num)
+    pair["change"] = pair["change"].map(lambda v: R.signed(v, 0))
+    lines += md_table(pair) + [""]
     lines += ["## Open data questions for the Business Manager", "",
               "| ID | Question | What we did meanwhile | What changes with the answer |", "|---|---|---|---|",
               "| I7 | 43.7% of the M3 rows repeat a day x origin x route key with different trip counts. Is a key column missing, or should the rows be added? | "
@@ -296,6 +306,7 @@ def main():
     findings.to_csv(OUT / "5.2_key_findings.csv", index=False)
     rob.to_csv(OUT / "5.3_verdict_robustness.csv", index=False)
     shifts["found"].to_csv(OUT / "5.3_level_shifts.csv", index=False)
+    shifts["pair"].to_csv(OUT / "5.3_zone_transfer.csv", index=False)
     write_findings(findings, q0, extra)
     write_limitations(rob, shifts, extra)
     fig_charter_maps(q0)

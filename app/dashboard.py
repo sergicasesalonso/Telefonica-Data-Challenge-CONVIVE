@@ -799,7 +799,8 @@ with tab_quality:
             sh = final["shifts"]
             st.subheader(f"Level shifts: {sh['barrio_name'].nunique()} of 73 neighbourhoods change level in the source")
             st.markdown('<div class="limit">Rule: the median share of the city in the six months from a month is at least 1.5 times (or at most 1/1.5 of) the '
-                        'median of the six months before. The scan locates the shift; it cannot say if visitors or the measurement changed.</div>', unsafe_allow_html=True)
+                        'median of the six months before. The scan locates the shift; it cannot say if visitors or the measurement changed. Can Peguera and el Turó de la Peira, next to each other, shift in opposite '
+                        'directions in April 2024, which looks like a change of zones.</div>', unsafe_allow_html=True)
             shown = sh[["barrio_name", "distrito_name", "product", "month", "ratio"]].assign(
                 month=pd.to_datetime(sh["month"], format="%Y%m").dt.strftime("%b %Y"), ratio=sh["ratio"].map("x{:.2f}".format))
             st.dataframe(shown.rename(columns={"barrio_name": "Neighbourhood", "distrito_name": "District", "product": "Product", "month": "Month",
