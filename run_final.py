@@ -1,7 +1,7 @@
 """CONVIVE - one command for the whole product, from the raw monthly files to the dashboard tables.
 
     python run_final.py                  everything (needs data/; about 25 minutes on a laptop)
-    python run_final.py --from-tables    from the aggregated tables only (no raw data needed; about 1 minute)
+    python run_final.py --from-tables    from the aggregated tables only (no raw data needed; about 3 minutes with the checks)
     python run_final.py --notebook       also build and execute CONVIVE_Final.ipynb
 
 Steps:
