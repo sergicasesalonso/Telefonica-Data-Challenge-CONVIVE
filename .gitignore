@@ -18,3 +18,9 @@ deliverables/iteration3/**/*.json
 deliverables/iteration3/**/*.png
 deliverables/iteration3/**/*.html
 !deliverables/iteration3/**/README.md
+# Final delivery: same rule, tables, figures and packages are regenerated locally
+deliverables/final/**/*.csv
+deliverables/final/**/*.json
+deliverables/final/**/*.png
+deliverables/final/**/*.zip
+.venv*/
