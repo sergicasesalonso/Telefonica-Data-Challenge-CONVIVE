@@ -277,7 +277,8 @@ def write_limitations(rob, shifts, extra):
     lines += md_table(pair) + [""]
     lines += ["## Open data questions for the Business Manager", "",
               "| ID | Question | What we did meanwhile | What changes with the answer |", "|---|---|---|---|",
-              "| I7 | 43.7% of the M3 rows repeat a day x origin x route key with different trip counts. Is a key column missing, or should the rows be added? | "
+              "| I7 | 43.7% of the M3 rows repeat a day x origin x route key (27.7% are exact copies; 6.3 of the 14.7 million repeated keys carry different trip counts). "
+              "Is a key column missing, or should the rows be added? | "
               "M3 is kept out of every answer; Q13 uses T6. | M3 could add trips from each municipality to each neighbourhood. |",
               f"| I8 | Why do six neighbourhoods have so few visitors, and was the zoning changed? Level shifts affect {found['barrio_name'].nunique()} neighbourhoods, {int(found['month'].between('202307', '202405').sum())} of {len(found)} shifts between July 2023 and May 2024. | "
               "Values are kept and flagged; Q0 is also reported without the affected neighbourhoods. | Series could be corrected or cut at the change. |",

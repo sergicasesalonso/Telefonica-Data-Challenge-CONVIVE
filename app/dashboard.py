@@ -807,7 +807,7 @@ with tab_quality:
                                                "ratio": "After / before"}), hide_index=True, width="stretch", height=320)
         st.subheader("Open data questions")
         st.markdown("""
-- **I7** · 43.7% of the M3 rows repeat a key with different trip counts. M3 is not used in any answer.
+- **I7** · 43.7% of the M3 rows repeat a key; part are exact copies and part carry different trip counts. M3 is not used in any answer.
 - **I8** · Low-data neighbourhoods and level shifts. Values are kept and flagged.
 - **I9** · T9 has no international visitors. The age and income profile covers national and regional visitors only.
 """)
