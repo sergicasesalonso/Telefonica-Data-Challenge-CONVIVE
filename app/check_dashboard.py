@@ -1,4 +1,4 @@
-"""Checks for the dashboard (WBS 4.2.0; extended in Iteration 3 for the 4.2.3 day-type and area filters and the new tabs).
+"""Integration checks of the dashboard (WBS 4.3.1): every filter on every view, edge cases and privacy rule.
 
   1. Each filter changes each view, computed on the view's data.
   2. The app runs without an exception on normal and edge-case selections.
@@ -18,6 +18,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
 import dashboard_data as dd   # noqa: E402
+import dashboard_final as df4   # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -36,8 +37,12 @@ VARIANTS = {
 }
 # Mobility has no visitor type, so this one cannot change. The view says so on screen.
 # Monthly files have no day detail, so the day-type filter changes only the daily view (Q4) and trips (Q6).
-EXPECTED_UNCHANGED = {("Q6 trip share", "type")} | {(v, "day type") for v in (
+EXPECTED_UNCHANGED = {("Q6 trip share", "type")} | {(v, x) for v in ("V&R months", "V&R weekdays", "V&R neighbourhoods", "V&R change") for x in ("origin", "type")} | {
+    ("Overnight stays", x) for x in ("month range", "type", "day type", "district")} | {(v, "day type") for v in (
     "Q3 KPI tiles", "Q3 stacked bars", "Q2 monthly evolution", "Q5 city comparison", "Q5 neighbourhood change", "Q1 map and top 10")}
+
+
+FINAL = df4.load()
 
 
 def fingerprint(value):
@@ -52,7 +57,10 @@ def views(tables, f):
     return {"Q3 KPI tiles": dd.kpis(tables, f), "Q3 stacked bars": dd.segments_by_month(tables, f),
             "Q2 monthly evolution": dd.monthly_evolution(tables, f), "Q5 city comparison": dd.yoy_city(tables, f),
             "Q5 neighbourhood change": dd.yoy_barrio(tables, f), "Q4 weekday": dd.weekday_pattern(tables, f),
-            "Q1 map and top 10": dd.barrio_values(tables, f), "Q6 trip share": dd.trip_share(tables, f)}
+            "Q1 map and top 10": dd.barrio_values(tables, f), "Q6 trip share": dd.trip_share(tables, f),
+            "V&R months": df4.monthly_trips(tables, f), "V&R weekdays": df4.weekday_trips(tables, f),
+            "V&R neighbourhoods": df4.barrio_share(tables, f), "V&R change": df4.share_change(tables, f)[0],
+            "Overnight stays": df4.overnight(FINAL, f)}
 
 
 def check_filters(tables):
@@ -112,6 +120,7 @@ def check_app():
         "one month": {"f_months": (7, 7), "f_years": [2024]},
         "two years": {"f_years": [2023, 2025]},
         "2025 and autumn": {"f_months": (9, 12)},
+        "only 2025 and autumn (no data)": {"f_years": [2025], "f_months": (9, 12)},
         "only Residente": {"f_origins": ["Residente"]},
         "no origin": {"f_origins": []},
         "no year": {"f_years": []},
