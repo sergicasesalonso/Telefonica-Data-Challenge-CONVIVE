@@ -2,9 +2,32 @@
 
 Team 102_A (Convive Lab) · Mobile Data Challenge 2026, Challenge #2 "Visitors and residents in the same space".
 
-- **Iteration 3 (current, 10-23 Nov 2026):** validated aggregated tables, research questions Q1-Q20 quantified with explicit decision rules (Business Manager feedback of 9 Nov), analysis of the neighbourhoods with very few data, a nationality analysis of international visitors (161 countries), and a dashboard with six tabs and neighbourhood, district and day filters.
-- **Iteration 2:** real Smart Steps data, aggregated statistics and a preliminary dashboard answering Q1 to Q6.
-- **Iteration 1:** notebook structure, base map, data review plan and analytical toolkit, on synthetic data. It still runs.
+- **Final delivery (current, 29 Nov 2026):** final dashboard with nine tabs, one command for the whole pipeline, final notebook, user guide, tests, the answer to the Charter question (visitors against residents), robustness of the 21 verdicts and a scan of level shifts in the source.
+- **Iteration 3 (10-23 Nov 2026):** validated aggregated tables, research questions Q1-Q20 quantified with explicit decision rules, low-data neighbourhoods and nationalities.
+- **Iteration 2 (27 Oct-9 Nov):** real Smart Steps data, aggregated statistics and a preliminary dashboard answering Q1 to Q6.
+- **Iteration 1 (19-26 Oct):** notebook structure, base map, data review plan and analytical toolkit, on synthetic data. It still runs.
+
+## Final delivery: how to run
+
+```bash
+python -m pip install -r requirements.txt
+python run_final.py                  # everything, from the monthly files (needs data/)
+python run_final.py --from-tables    # from the aggregated tables (no raw data)
+python -m streamlit run app/dashboard.py     # or start_dashboard.bat on Windows
+```
+
+| WBS | Output | Where |
+|---|---|---|
+| 2.2.1, 2.2.2 | 14 aggregated tables and their validation log | `deliverables/iteration3/` |
+| 3.2.x | Quantified answers Q1-Q20 and analysis reports | `deliverables/iteration3/` |
+| 3.3.1 | Reproducibility test record | `deliverables/final/3.3.1_reproducibility_test.md` |
+| 3.3.2 | Final notebook and user guide | `CONVIVE_Final.ipynb`, `deliverables/final/3.3.2_user_guide.md` |
+| 4.3.1 | Test checklist, unit tests and integration checks | `deliverables/final/4.3.1_test_checklist.md`, `tests/`, `app/check_dashboard.py` |
+| 4.3.2 | Final dashboard | `app/dashboard.py`, `start_dashboard.bat` |
+| 5.2 | Charter question and key findings | `deliverables/final/5.2_key_findings.md`, `coexistence.py` |
+| 5.3 | Robustness, level shifts, open data questions | `deliverables/final/5.3_limitations.md`, `sensitivity.py`, `breaks.py` |
+
+`python make_package.py` builds the hand-over zip. With `--with-tables` it adds the aggregated tables, only for people covered by the NDA. `requirements-lock.txt` holds the exact versions of the reproducibility test.
 
 ## Iteration 3: how to run
 
@@ -23,7 +46,7 @@ python -m jupyter nbconvert --execute --to notebook --inplace --ExecutePreproces
 streamlit run app/dashboard.py
 ```
 
-Optional: `python app/check_dashboard.py` (every filter, 16 app cases) and `python app/take_screenshots_i3.py` (PNG of each new view).
+The dashboard is now the final one (see above); `python app/check_dashboard.py` tests it.
 
 The aggregation step reads the monthly CSV files directly with pandas, so it also runs on a computer without DuckDB or Parquet support (3.3.1 reproducibility). Everything after it reads only aggregated tables.
 
@@ -100,13 +123,21 @@ research_report.py           WBS 3.2.0-3.2.4: Markdown reports, CSV tables and f
 run_iteration3.py            runs the Iteration 3 steps
 make_notebook_i3.py          builds CONVIVE_Iteration3.ipynb
 app/dashboard_i3.py          data logic of the Iteration 3 dashboard tabs
-app/take_screenshots_i3.py   screenshots of the Iteration 3 views
-make_delivery.py             builds the delivery document
-app/dashboard.py             WBS 4.2.0: Streamlit dashboard (dashboard_data.py holds its logic)
+coexistence.py               Charter question: visitors against residents, per neighbourhood and year
+sensitivity.py               robustness of the verdicts when the thresholds move
+breaks.py                    level shifts in the neighbourhood series (I8)
+final_outputs.py             WBS 5.2, 5.3: key findings, limitations, figures
+run_final.py                 one command for the whole product
+make_notebook_final.py       builds CONVIVE_Final.ipynb
+make_package.py              builds the hand-over zip
+tests/                       unit tests (no NDA data needed)
+app/dashboard_final.py       data logic of the final tabs
+make_delivery.py             builds the Iteration 2 delivery document
+app/dashboard.py             WBS 4.3.2: Streamlit dashboard (dashboard_data.py holds its logic)
 app/check_dashboard.py       automatic checks of the dashboard
 app/hello_streamlit.py       WBS 4.1.3: minimal test page
 app/make_layout_sketch.py    WBS 4.1.1: wireframe PNG
-app/take_screenshots.py      screenshots for the delivery and the demo
+app/take_screenshots.py      screenshots of the final dashboard
 deliverables/iteration2/     one output per WBS ID (see below)
 convive.py                   data catalogue, load(), review(), maps
 analysis.py                  analysis methods, including the cross-file checks
