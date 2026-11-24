@@ -53,6 +53,17 @@ def test_suppressed_is_unknown_not_zero():
     assert dd.to_number(pd.Series(["<15", "", "20"])).isna().tolist() == [True, True, False]
 
 
+@pytest.mark.parametrize("dtype", ["object", "string"])
+def test_grouped_segments_are_counted_with_any_text_type(dtype, monkeypatch):
+    """pandas 3 reads text as 'str' and not 'object': the count of grouped NA rows must not depend on it."""
+    df = pd.DataFrame({"cod_barrio": ["080190101"] * 4, "mes": ["202301"] * 4, "pais": ["France", "NA", "NA", "Italy"],
+                       "visitantes": [20.0, 30.0, 40.0, 50.0]}).astype({"cod_barrio": dtype, "mes": dtype, "pais": dtype})
+    monkeypatch.setattr(A, "save", lambda *a, **k: None)
+    lookup = pd.DataFrame({"cod_barrio": ["080190101"], "barrio_name": ["el Raval"], "distrito": ["01"], "distrito_name": ["Ciutat Vella"]})
+    monkeypatch.setattr(A, "barrio_lookup", lambda: lookup)
+    assert A.coverage_table({"T8": df})["rows_grouped_na"].tolist() == [2]
+
+
 # Metrics ------------------------------------------------------------------------------------------------------
 def test_n50():
     assert R.n_share([50, 30, 20]) == 1

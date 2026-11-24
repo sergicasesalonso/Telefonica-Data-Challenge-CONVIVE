@@ -207,7 +207,7 @@ def coverage_table(frames):
     rows = []
     for key, df in frames.items():
         df = df[df["cod_barrio"] != GROUPED]
-        text_dims = [c for c in df.columns if df[c].dtype == object and c not in ("cod_barrio", "mes", "date_dt", "date")]
+        text_dims = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c]) and c not in ("cod_barrio", "mes", "date_dt", "date")]
         is_grouped = np.zeros(len(df), dtype=bool)
         for c in text_dims:
             is_grouped |= (df[c] == GROUPED).to_numpy()

@@ -105,7 +105,7 @@ def load_tables(stats_dir=STATS_DIR):
         tables["t5"]["year"] = tables["t5"]["date"].dt.year
         tables["t5"]["month"] = tables["t5"]["date"].dt.month
     for key in ("city_daily", "trips"):
-        if tables[key]["is_weekend"].dtype == object:
+        if not pd.api.types.is_bool_dtype(tables[key]["is_weekend"]):
             tables[key]["is_weekend"] = tables[key]["is_weekend"].astype(str).str.lower() == "true"
     tables["city_monthly"]["visitantes"] = to_number(tables["city_monthly"]["visitantes"])
     tables["city_daily"]["visitantes"] = to_number(tables["city_daily"]["visitantes"])
