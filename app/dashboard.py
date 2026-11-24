@@ -1,10 +1,10 @@
-"""CONVIVE dashboard. Iteration 2: preliminary dashboard (WBS 4.2.0) and interactive maps (4.2.1).
-Iteration 3: charts and indicators for the quantified research questions (4.2.2) and geographic and temporal filters
-applied to every view (4.2.3), in five tabs.
+"""CONVIVE dashboard, final version (WBS 4.3.2).
 
-Run locally:  streamlit run app/dashboard.py
-Data input:   only aggregated tables (deliverables/iteration2/3.1.6_stats/, deliverables/iteration3/) and the
-              neighbourhood GeoJSON. Nothing leaves this computer.
+Nine tabs: key findings, visitors and residents, Q1-Q6 views, overnight stays, research answers, neighbourhood explorer,
+who visits, nationalities and data quality. One set of filters in the sidebar (year, months, origin, type, days, area).
+
+Run locally:  streamlit run app/dashboard.py      (or start_dashboard.bat on Windows)
+Data input:   only aggregated tables (deliverables/) and the neighbourhood GeoJSON. Nothing leaves this computer.
 """
 
 import sys
@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import convive as cv                  # noqa: E402
 import dashboard_data as dd           # noqa: E402
+import dashboard_final as df4          # noqa: E402
 import dashboard_i3 as d3             # noqa: E402
 
 # Okabe-Ito, colour-blind safe (validated). The same colour per origin everywhere, plus legends, line markers,
@@ -29,7 +30,7 @@ YEAR_COLORS = {2023: "#BDBDBD", 2024: "#7F7F7F", 2025: "#333333"}
 SEQUENTIAL = "Purples"
 DIVERGING = "RdBu"
 INK, MUTED, GRID, OUTLINE = "#1f1f1f", "#5f5f5f", "#e6e6e6", "#a9a9a9"
-FOOTER = "CONVIVE · Team 102_A · Dashboard, Iteration 3 · Smart Steps data supplied under NDA · aggregated, threshold 15"
+FOOTER = "CONVIVE · Team 102_A · Final dashboard · Smart Steps data supplied under NDA · aggregated, threshold 15"
 
 st.set_page_config(page_title="CONVIVE dashboard", page_icon="🗺️", layout="wide")
 st.markdown("""<style>
@@ -48,6 +49,11 @@ def load():
 @st.cache_data(show_spinner="Loading Iteration 3 results…")
 def load_i3():
     return d3.load()
+
+
+@st.cache_data(show_spinner="Loading the final results…")
+def load_final():
+    return df4.load()
 
 
 @st.cache_data
@@ -115,9 +121,9 @@ with st.sidebar:
     years = st.multiselect("Year", [2023, 2024, 2025], default=[2023, 2024, 2025], key="f_years")
     month_from, month_to = st.select_slider("Month range", options=list(range(1, 13)), value=(1, 12),
                                             format_func=lambda m: dd.MONTHS[m - 1], key="f_months")
-    origins = st.multiselect("Visitor origin", dd.TRIP_ORIGINS, default=dd.VISITOR_ORIGINS, key="f_origins",
-                             help="Residente exists only in trips, so it affects only the trips view (Q6).")
-    types = st.multiselect("Visitor type", dd.VISITOR_TYPES, default=dd.VISITOR_TYPES, key="f_types",
+    origins = st.multiselect("Visitor origin", dd.TRIP_ORIGINS, default=dd.VISITOR_ORIGINS, key="f_origins", format_func=df4.en,
+                             help="Residents exist only in trips, so this option affects only the trips view (Q6).")
+    types = st.multiselect("Visitor type", dd.VISITOR_TYPES, default=dd.VISITOR_TYPES, key="f_types", format_func=df4.en,
                            help="Mobility data have no visitor type, so this does not affect the trips view (Q6).")
     day_type = st.radio("Days", dd.DAY_TYPES, index=0, key="f_days", horizontal=False,
                         help="Applies to the daily views (Q4) and to trips (Q6). Monthly files have no day detail.")
@@ -129,11 +135,12 @@ with st.sidebar:
     barrios = st.multiselect("Neighbourhood", choices["barrio_name"].tolist(), key="f_barrios",
                              help="Empty = every neighbourhood of the selected districts.")
     st.divider()
-    st.caption("2025 covers January to August. Regional visitors are always excursionists. With an area selected, "
+    st.caption("2025 covers January to August. Regional visitors are always day-trippers. With an area selected, "
                "visitor views use neighbourhood files and show presences (a person in two selected neighbourhoods counts twice).")
 
 f = dd.Filters(sorted(years), month_from, month_to, origins, types, day_type, dd.area_codes(lookup, districts, barrios))
 i3 = load_i3()
+final = load_final()
 
 # ------------------------------------------------------------------------------------------------
 # Header
@@ -141,16 +148,143 @@ i3 = load_i3()
 st.title("CONVIVE · Visitors and residents in Barcelona")
 period = f"{dd.MONTHS[month_from - 1]} to {dd.MONTHS[month_to - 1]}" if month_from != month_to else dd.MONTHS[month_from - 1]
 area_text = (", ".join(barrios) if barrios else ", ".join(districts)) if f.has_area else "whole city"
-st.markdown(f"Iteration 3 dashboard · **{period}**, **{', '.join(map(str, f.years)) or 'no year selected'}** · "
-            f"origin: **{', '.join(f.origins) or 'none'}** · type: **{', '.join(f.types) or 'none'}** · "
+st.markdown(f"**{period}**, **{', '.join(map(str, f.years)) or 'no year selected'}** · "
+            f"origin: **{', '.join(map(df4.en, f.origins)) or 'none'}** · type: **{', '.join(map(df4.en, f.types)) or 'none'}** · "
             f"days: **{f.day_type.lower()}** · area: **{area_text}**")
 
 MEASURE = dd.measure_label(f)
 Y_MONTH = "Presences per month (selected area)" if f.has_area else "Unique visitors per month"
 Y_DAY = "Mean presences per day (selected area)" if f.has_area else "Mean unique visitors per day"
 
-tab_q, tab_rq, tab_explore, tab_who, tab_nat, tab_quality = st.tabs(
-    ["Q1–Q6 views", "Research answers Q1–Q20", "Neighbourhood explorer", "Who visits", "Nationalities", "Data quality"])
+tab_key, tab_vr, tab_q, tab_night, tab_rq, tab_explore, tab_who, tab_nat, tab_quality = st.tabs(
+    ["Key findings", "Visitors & residents", "Q1–Q6 views", "Overnight stays", "Research answers", "Neighbourhood explorer",
+     "Who visits", "Nationalities", "Data quality"])
+no_years = not f.years
+ROBUST_BADGE = {"Robust": "🟢 robust", "Moderate": "🟠 moderate", "Fragile": "🔴 fragile"}
+
+# ------------------------------------------------------------------------------------------------
+# Key findings: the Charter question and five findings (RQ-15), whole period
+# ------------------------------------------------------------------------------------------------
+with tab_key:
+    if not df4.available(final):
+        st.info("Run `python run_final.py` (or `python final_outputs.py`) to build the key findings.")
+    else:
+        q0 = final["charter"].iloc[0]
+        st.subheader("How does the presence of visitors change over time in the neighbourhoods, compared with residents?")
+        st.markdown('<div class="limit">Charter question, whole period (January 2023–August 2025). This tab does not follow the filters; the other tabs do.</div>',
+                    unsafe_allow_html=True)
+        st.markdown(q0["answer"])
+        st.info(f"**Decision rule.** {q0['decision_rule']}")
+        badge = ROBUST_BADGE.get(df4.robustness_of(final, "Q0"), "")
+        st.warning(f"**{q0['verdict']}.** Belief “{q0['belief']}” holds: **{q0['belief_holds']}** · {badge}: with a threshold 10% stricter the "
+                   "verdict becomes Partly, so read the direction, not the count.")
+        left, right = st.columns([1.35, 1])
+        for column, name in ((left, "charter_maps"), (right, "charter_time")):
+            image = df4.FINAL / "figures" / f"{name}.png"
+            if image.exists():
+                column.image(str(image), width="stretch")
+        st.markdown(f'<div class="limit">Limitation: {q0["limitation"]}</div>', unsafe_allow_html=True)
+        for finding in final["findings"].itertuples():
+            if finding.id == "F2":          # F2 is the Charter question, shown above
+                continue
+            with st.container(border=True):
+                st.markdown(f"#### {finding.title}")
+                text, picture = st.columns([1, 1.15])
+                text.markdown(finding.evidence)
+                text.caption(f"Questions {finding.questions} · verdict {ROBUST_BADGE.get(finding.robustness, finding.robustness)} to a change of threshold")
+                text.markdown(f'<div class="limit">Limitation: {finding.limitation}</div>', unsafe_allow_html=True)
+                image = df4.DELIVERABLES / finding.figure
+                if image.exists():
+                    picture.image(str(image), width="stretch")
+
+# ------------------------------------------------------------------------------------------------
+# Visitors and residents (RQ-04): trips of both groups, following the filters
+# ------------------------------------------------------------------------------------------------
+with tab_vr:
+    summary = df4.city_summary(tables, f) if not no_years else None
+    if no_years:
+        st.warning("Select at least one year.")
+    elif summary is None:
+        st.warning("This selection has no trips in the data. 2025 stops in August.")
+    else:
+        view_header("Visitors and residents: who moves in each neighbourhood, and when?",
+                    "trips into a neighbourhood, not people. Trips inside a neighbourhood are excluded and flows below 15 appear as 0. "
+                    "Year, month, day and area filters apply; origin and type do not, because the comparison needs both groups.")
+        a, b, c = st.columns(3)
+        a.metric("Visitors' trips per day", f"{summary['visitors_per_day']:,.0f}")
+        b.metric("Residents' trips per day", f"{summary['residents_per_day']:,.0f}")
+        c.metric("Visitor share of trips", f"{summary['share']:.1%}" if summary["share"] is not None else "n/a")
+        left, right = st.columns([1.3, 1])
+        with left:
+            st.markdown("**Trips per observed day, by month**")
+            m = df4.monthly_trips(tables, f)
+            fig = go.Figure()
+            for group, colour, symbol in (("Visitors", ORIGIN_COLORS["Internacional"], "circle"), ("Residents", ORIGIN_COLORS["Residente"], "triangle-up")):
+                fig.add_scatter(x=m["date"], y=m[group], name=group, mode="lines+markers", line={"color": colour, "width": 2},
+                                marker={"size": 7, "symbol": symbol}, customdata=m["visitor_share"],
+                                hovertemplate=f"{group}<br>%{{x|%b %Y}}: %{{y:,.0f}} per day<br>Visitor share %{{customdata:.1%}}<extra></extra>")
+            fig = base_layout(fig, 350, "Trips per day", ",.0f")
+            fig.update_xaxes(tickformat="%b %Y")
+            show(fig, "vr_month")
+        with right:
+            st.markdown("**Rhythm of the week (mean day = 100)**")
+            w = df4.weekday_trips(tables, f)
+            fig = go.Figure()
+            for group, colour in (("Visitors", ORIGIN_COLORS["Internacional"]), ("Residents", ORIGIN_COLORS["Residente"])):
+                fig.add_bar(x=w["weekday"], y=w[group], name=group, marker={"color": colour}, hovertemplate=f"{group} · %{{x}}: %{{y:.0f}}<extra></extra>")
+            fig.update_layout(barmode="group", bargap=0.25)
+            show(base_layout(fig, 350, "Index"), "vr_week")
+        share = df4.barrio_share(tables, f)
+        change, first, last, months = df4.share_change(tables, f)
+        left, right = st.columns(2)
+        with left:
+            st.markdown("**Visitor share of incoming trips**")
+            show(choropleth(share, "share", "Share", "<b>%{customdata[0]}</b><br>%{customdata[1]}<br>%{z:.1%} of incoming trips<extra></extra>",
+                            colorscale="RdBu_r", tick=".0%", zmid=0.5, zlimits=(0.25, 0.75), height=470), "vr_map")
+            st.caption("Red: visitors make most trips. Blue: residents do. Colours stop at 25% and 75%.")
+        with right:
+            if change is None or change.empty:
+                st.info("Select at least two years with months in common to see the change.")
+            else:
+                st.markdown(f"**Change in the share, {first} to {last} (percentage points)**")
+                show(choropleth(change, "points", "Points", "<b>%{customdata[0]}</b><br>%{customdata[1]}<br>%{z:+.1f} points<extra></extra>",
+                                colorscale="PuOr_r", zmid=0, zlimits=(-8, 8), height=470), "vr_change")
+                st.caption("Equivalent months: " + ", ".join(dd.MONTHS[x - 1] for x in months) + ". Colours stop at ±8 points. "
+                           "Neighbourhoods with a level shift in the source are listed in Data quality.")
+        if change is not None and not change.empty:
+            with st.expander("Table: visitor share per neighbourhood"):
+                view = change.assign(base=change["base"].map("{:.1%}".format), latest=change["latest"].map("{:.1%}".format),
+                                     points=change["points"].map("{:+.1f}".format))
+                st.dataframe(view[["barrio_name", "distrito_name", "base", "latest", "points"]].rename(columns={
+                    "barrio_name": "Neighbourhood", "distrito_name": "District", "base": f"Share {first}", "latest": f"Share {last}", "points": "Points"}),
+                    hide_index=True, width="stretch")
+
+# ------------------------------------------------------------------------------------------------
+# Overnight stays (RQ-06): municipality level only
+# ------------------------------------------------------------------------------------------------
+with tab_night:
+    view_header("Overnight stays: how many nights do tourists spend in Barcelona in a week?",
+                "the data (T3) exist only for the whole municipality, per week, and for national and international tourists. A stay over two weeks "
+                "counts in both. Year and origin filters apply; month, day, type and area cannot apply.")
+    dist = df4.overnight(final, f)
+    if dist.empty:
+        st.info("Select at least one year and national or international visitors.")
+    else:
+        numbers = df4.overnight_summary(dist)
+        columns = st.columns(2 * len(numbers))
+        for i, (origin, n) in enumerate(numbers.items()):
+            columns[2 * i].metric(f"{df4.en(origin)}: 1–2 nights", f"{n['short']:.1%}")
+            columns[2 * i + 1].metric(f"{df4.en(origin)}: mean nights", f"{n['mean']:.1f}")
+        fig = go.Figure()
+        for origin, g in dist.groupby("origen"):
+            fig.add_bar(x=g["pernoctaciones"], y=g["share"], name=df4.en(origin), marker={"color": ORIGIN_COLORS[origin]},
+                        text=g["share"].map("{:.0%}".format), textposition="outside", cliponaxis=False,
+                        hovertemplate=f"{df4.en(origin)} · %{{x}} nights: %{{y:.1%}}<extra></extra>")
+        fig.update_layout(barmode="group", bargap=0.25)
+        fig = base_layout(fig, 380, "Share of a week's tourists", ".0%")
+        fig.update_xaxes(title="Nights in the week", dtick=1)
+        show(fig, "night_bars")
+        st.caption("Selected years together, weighted by weeks. 2025 covers January to August.")
 
 with tab_q:
     with st.expander("How to read this", expanded=True):
@@ -162,16 +296,15 @@ with tab_q:
 - The results describe **patterns, not causes**.
 """)
 
-    no_years = not f.years
     no_visitors = no_years or not f.visitor_origins or not f.types
     if no_years:
         st.warning("Select at least one year.")
     elif no_visitors:
-        st.warning("The visitor views need at least one visitor origin (Internacional, Nacional or Regional) and one visitor type. The trips view (Q6) is still available below.")
+        st.warning("The visitor views need at least one visitor origin (international, national or regional) and one visitor type. The trips view (Q6) is still available below.")
     elif dd.kpis(tables, f) is None:
         no_visitors = True
-        st.warning("This combination has no visitors in the data. Regional visitors are always excursionists, so Regional + Turista is empty. The trips view (Q6) is still available below.")
-    gaps =dd.incomplete_months(tables, f) if not no_years else []
+        st.warning("This combination has no visitors in the data. Regional visitors are always day-trippers, so Regional + Overnight tourist is empty. The trips view (Q6) is still available below.")
+    gaps = dd.incomplete_months(tables, f) if not no_years else []
     if gaps:
         st.caption(f"Months with one missing day in the source, flagged and not imputed: {', '.join(gaps)}.")
 
@@ -182,7 +315,7 @@ with tab_q:
         with st.container(border=True):
             k = dd.kpis(tables, f)
             view_header("Q3 · Who visits? " + ("Presences in the selected area" if f.has_area else "Unique visitors") + " and their composition",
-                        "regional visitors are always excursionists by definition, which raises the excursionist share.")
+                        "regional visitors are always day-trippers by definition, which raises the day-tripper share.")
             if k is None:
                 st.info("No visitor data for this selection.")
             else:
@@ -191,7 +324,7 @@ with tab_q:
                 columns[0].metric(label, dd.format_count(k["visitors"]))
                 for column, origin in zip(columns[1:4], dd.VISITOR_ORIGINS):
                     value = k["origin_share"].get(origin)
-                    column.metric(f"{origin} share", f"{value:.1%}" if value is not None else "not selected")
+                    column.metric(f"{df4.en(origin)} share", f"{value:.1%}" if value is not None else "not selected")
                 columns[4].metric("Tourist share", f"{k['tourist_share']:.1%}")
                 if not k["single_month"]:
                     st.caption("Several months are selected, so the first tile is a monthly average, never a sum of months. "
@@ -201,14 +334,14 @@ with tab_q:
                 segments = dd.segments_by_month(tables, f)
                 fig = go.Figure()
                 for (origin, tipo), g in segments.groupby(["origen", "tipo_visitante"], sort=False):
-                    fig.add_bar(x=pd.to_datetime(g["mes"], format="%Y%m"), y=g["visitantes"], name=f"{origin} · {tipo}",
+                    fig.add_bar(x=pd.to_datetime(g["mes"], format="%Y%m"), y=g["visitantes"], name=f"{df4.en(origin)} · {df4.en(tipo).lower()}",
                                 marker={"color": ORIGIN_COLORS[origin], "pattern": {"shape": "/" if tipo == "Excursionista" else ""},
                                         "line": {"color": "white", "width": 1}},
-                                hovertemplate=f"{origin} · {tipo}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
+                                hovertemplate=f"{df4.en(origin)} · {df4.en(tipo)}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
                 fig.update_layout(barmode="stack", bargap=0.25)
                 show(base_layout(fig, 340, Y_MONTH, ",.0f"), "q3_bars")
                 with st.expander("Table"):
-                    st.dataframe(segments.assign(visitantes=segments["visitantes"].map(dd.format_count)), hide_index=True, width="stretch")
+                    st.dataframe(segments.assign(origen=segments["origen"].map(df4.en), tipo_visitante=segments["tipo_visitante"].map(df4.en), visitantes=segments["visitantes"].map(dd.format_count)).rename(columns={"mes": "Month code", "year": "Year", "month": "Month", "origen": "Origin", "tipo_visitante": "Type", "visitantes": "Visitors"}), hide_index=True, width="stretch")
 
         # --------------------------------------------------------------------------------------------
         # Q2 and Q5
@@ -222,12 +355,12 @@ with tab_q:
                 g = evolution[evolution["origen"] == origin]
                 if g.empty:
                     continue
-                fig.add_scatter(x=g["date"], y=g["visitantes"], name=origin, mode="lines+markers",
+                fig.add_scatter(x=g["date"], y=g["visitantes"], name=df4.en(origin), mode="lines+markers",
                                 line={"color": ORIGIN_COLORS[origin], "width": 2},
                                 marker={"color": ORIGIN_COLORS[origin], "size": 8, "symbol": ORIGIN_SYMBOLS[origin], "line": {"color": "white", "width": 1}},
-                                hovertemplate=f"{origin}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
+                                hovertemplate=f"{df4.en(origin)}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
                 last = g.dropna(subset=["visitantes"]).iloc[-1]
-                fig.add_annotation(x=last["date"], y=last["visitantes"], text=origin, showarrow=False, xanchor="left", xshift=9,
+                fig.add_annotation(x=last["date"], y=last["visitantes"], text=df4.en(origin), showarrow=False, xanchor="left", xshift=9,
                                    font={"color": INK, "size": 12})
             base_layout(fig, 360, Y_MONTH, ",.0f")
             fig.update_xaxes(tickformat="%b %Y", hoverformat="%b %Y")
@@ -235,7 +368,7 @@ with tab_q:
             show(fig, "q2_lines")
             ratio = dd.peak_to_trough(evolution)
             with st.expander("Table: peak-to-trough ratio per origin and year"):
-                st.dataframe(ratio, hide_index=True, width="stretch")
+                st.dataframe(ratio.assign(origin=ratio["origin"].map(df4.en)) if len(ratio) else ratio, hide_index=True, width="stretch")
 
         with st.container(border=True):
             view_header("Q5 · Did visitors grow between equivalent periods?",
@@ -252,7 +385,7 @@ with tab_q:
                     fig = go.Figure()
                     for year, g in yoy.groupby("year"):
                         labels = [("" if pd.isna(c) else f"{c:+.1%}") for c in g["change_vs_previous_year"]]
-                        fig.add_bar(x=g["origen"], y=g["mean_monthly_visitors"], name=str(year), marker={"color": YEAR_COLORS[year]},
+                        fig.add_bar(x=g["origen"].map(df4.en), y=g["mean_monthly_visitors"], name=str(year), marker={"color": YEAR_COLORS[year]},
                                     text=labels, textposition="outside", textfont={"size": 11, "color": INK}, cliponaxis=False,
                                     hovertemplate=f"%{{x}} · {year}<br>%{{y:,.0f}} per month<extra></extra>")
                     fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.06)
@@ -286,17 +419,17 @@ with tab_q:
             for origin in dd.VISITOR_ORIGINS:
                 g = pattern[pattern["origen"] == origin]
                 if len(g):
-                    fig.add_bar(x=g["weekday"].map(dd.WEEKDAYS_EN), y=g["mean_visitors"], name=origin, marker={"color": ORIGIN_COLORS[origin]},
+                    fig.add_bar(x=g["weekday"].map(dd.WEEKDAYS_EN), y=g["mean_visitors"], name=df4.en(origin), marker={"color": ORIGIN_COLORS[origin]},
                                 customdata=g[["median_visitors", "n_days"]],
-                                hovertemplate=f"{origin} · %{{x}}<br>Mean %{{y:,.0f}}<br>Median %{{customdata[0]:,.0f}}<br>%{{customdata[1]}} days<extra></extra>")
+                                hovertemplate=f"{df4.en(origin)} · %{{x}}<br>Mean %{{y:,.0f}}<br>Median %{{customdata[0]:,.0f}}<br>%{{customdata[1]}} days<extra></extra>")
             fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.06)
             fig.update_xaxes(categoryorder="array", categoryarray=list(dd.WEEKDAYS_EN.values()))
             show(base_layout(fig, 340, Y_DAY, ",.0f"), "q4_bars")
             difference = dd.weekend_difference(tables, f)
             if difference:
-                st.caption("Weekend days against weekdays, mean per day: " + " · ".join(f"{o} {v:+.1%}" for o, v in difference.items()))
+                st.caption("Weekend days against weekdays, mean per day: " + " · ".join(f"{df4.en(o)} {v:+.1%}" for o, v in difference.items()))
             with st.expander("Table"):
-                st.dataframe(pattern.assign(weekday=pattern["weekday"].map(dd.WEEKDAYS_EN)).drop(columns="weekday_idx").round(0), hide_index=True, width="stretch")
+                st.dataframe(pattern.assign(weekday=pattern["weekday"].map(dd.WEEKDAYS_EN), origen=pattern["origen"].map(df4.en)).drop(columns="weekday_idx").round(0).rename(columns={"weekday": "Weekday", "origen": "Origin", "mean_visitors": "Mean per day", "median_visitors": "Median per day", "n_days": "Days"}), hide_index=True, width="stretch")
 
         # --------------------------------------------------------------------------------------------
         # Q1
@@ -342,7 +475,7 @@ with tab_q:
                     top = pd.DataFrame({"#": top.index + 1, "Neighbourhood": top["barrio_name"], "District": top["distrito_name"],
                                         "Share": top["share"].map("{:.1%}".format)})
                     st.dataframe(top, hide_index=True, width="stretch", height=390, column_config=top_columns("Share"))
-                st.caption(f"Selected: {', '.join(f.origins)}. The denominator always includes all four origins, residents among them.")
+                st.caption(f"Selected: {', '.join(map(df4.en, f.origins))}. The denominator always includes all four origins, residents among them.")
 
 # ------------------------------------------------------------------------------------------------
 # Iteration 3 (4.2.2): research answers with their decision rule and verdict
@@ -357,7 +490,7 @@ with tab_rq:
         answers = i3["answers"]
         st.subheader("Each question has a metric, a decision rule fixed in advance, an answer and a verdict")
         st.markdown('<div class="limit">Business Manager feedback of 9 Nov: every question must be quantified with an explicit threshold. '
-                    'The rule decides the verdict, not the number. Q1–Q6 were shown at the Iteration 2 demo; Q7–Q20 are new in Iteration 3 (Q18–Q20: nationalities).</div>',
+                    'The rule decides the verdict, not the number. The last column says if the verdict survives a threshold 10% and 20% lower or higher. The thresholds are pending validation by the Business Manager (C12).</div>',
                     unsafe_allow_html=True)
         counts = answers["belief_holds"].value_counts()
         a, b, c, d = st.columns(4)
@@ -368,9 +501,11 @@ with tab_rq:
         overview = answers[["id", "belief", "belief_holds", "verdict"]].rename(
             columns={"id": "ID", "belief": "Common belief", "belief_holds": "Holds?", "verdict": "Verdict from the data (decision rule applied)"})
         overview["Holds?"] = overview["Holds?"].map(HOLDS_ICON)
+        overview["Threshold moved"] = [ROBUST_BADGE.get(df4.robustness_of(final, q), "n/a") for q in overview["ID"]]
         st.dataframe(overview, hide_index=True, width="stretch", height=640,
                      column_config={"ID": st.column_config.TextColumn(width=45), "Holds?": st.column_config.TextColumn(width=85),
-                                    "Common belief": st.column_config.TextColumn(width=330)})
+                                    "Common belief": st.column_config.TextColumn(width=300),
+                                    "Threshold moved": st.column_config.TextColumn(width=110)})
         st.divider()
         options = [f"{r.id} · {r.question}" for r in answers.itertuples()]
         choice = st.selectbox("Question in detail", options, key="rq_choice")
@@ -387,6 +522,11 @@ with tab_rq:
                 st.error(message)
             else:
                 st.warning(message)
+            robust = final["robustness"]
+            if robust is not None and (robust["id"] == row["id"]).any():
+                rb = robust[robust["id"] == row["id"]].iloc[0]
+                st.caption(f"If the threshold ({rb['threshold']}) moves: 20% lower {rb['-20%']} · 10% lower {rb['-10%']} · as fixed {rb['base']} · "
+                           f"10% higher {rb['+10%']} · 20% higher {rb['+20%']} → {ROBUST_BADGE[rb['robustness']]}")
             st.markdown(f'<div class="limit">Limitation: {row["limitation"]}</div>', unsafe_allow_html=True)
             figure = {"Q1": "q1_concentration", "Q2": "q2_seasonality", "Q3": "q3_origin_countries", "Q4": "q4_weekend_barrios",
                       "Q5": "q5_growth", "Q6": "q6_tourist_barris", "Q7": "q7_nights", "Q8": "q8_rank_season", "Q9": "q9_unusual_days",
@@ -421,17 +561,17 @@ with tab_explore:
         k3.metric("Visitor share of incoming trips", f"{e['visitor_share']:.1%}" if e["visitor_share"] is not None else "n/a")
         if e["lq"] is not None:
             top_origin = e["lq"].idxmax()
-            k4.metric("Most over-represented origin (LQ)", f"{top_origin} {e['lq'].max():.2f}")
+            k4.metric("Most over-represented origin (LQ)", f"{df4.en(top_origin)} {e['lq'].max():.2f}")
         left, right = st.columns(2)
         with left:
             fig = go.Figure()
             for origin in dd.VISITOR_ORIGINS:
                 g = e["series"][e["series"]["origen"] == origin]
                 if len(g):
-                    fig.add_scatter(x=g["date"], y=g["visitantes"], name=origin, mode="lines+markers",
+                    fig.add_scatter(x=g["date"], y=g["visitantes"], name=df4.en(origin), mode="lines+markers",
                                     line={"color": ORIGIN_COLORS[origin], "width": 2},
                                     marker={"color": ORIGIN_COLORS[origin], "size": 7, "symbol": ORIGIN_SYMBOLS[origin]},
-                                    hovertemplate=f"{origin}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
+                                    hovertemplate=f"{df4.en(origin)}<br>%{{x|%b %Y}}: %{{y:,.0f}}<extra></extra>")
             fig.update_xaxes(tickformat="%b %Y")
             st.markdown("**Unique visitors per month, by origin (T4)**")
             show(base_layout(fig, 320, "Unique visitors per month", ",.0f"), "ex_series")
@@ -442,15 +582,15 @@ with tab_explore:
                 for origin in dd.VISITOR_ORIGINS:
                     g = e["weekday"][e["weekday"]["origen"] == origin]
                     if len(g):
-                        fig.add_bar(x=[dd.WEEKDAYS_EN[dd.WEEKDAYS[i]] for i in g["weekday_idx"]], y=g["visitantes"], name=origin,
-                                    marker={"color": ORIGIN_COLORS[origin]}, hovertemplate=f"{origin} · %{{x}}: %{{y:,.0f}}<extra></extra>")
+                        fig.add_bar(x=[dd.WEEKDAYS_EN[dd.WEEKDAYS[i]] for i in g["weekday_idx"]], y=g["visitantes"], name=df4.en(origin),
+                                    marker={"color": ORIGIN_COLORS[origin]}, hovertemplate=f"{df4.en(origin)} · %{{x}}: %{{y:,.0f}}<extra></extra>")
                 fig.update_layout(barmode="group", bargap=0.25)
                 show(base_layout(fig, 320, "Mean visitors per day", ",.0f"), "ex_weekday")
         left, right = st.columns(2)
         with left:
             st.markdown("**Incoming trips by origin (M1)**")
             tb = e["trip_by_origin"].reindex(dd.TRIP_ORIGINS).fillna(0)
-            fig = go.Figure(go.Bar(x=tb.values, y=tb.index, orientation="h", marker={"color": [ORIGIN_COLORS[o] for o in tb.index]},
+            fig = go.Figure(go.Bar(x=tb.values, y=[df4.en(o) for o in tb.index], orientation="h", marker={"color": [ORIGIN_COLORS[o] for o in tb.index]},
                                    text=[f"{v / tb.sum():.1%}" if tb.sum() else "" for v in tb.values], textposition="outside",
                                    hovertemplate="%{y}: %{x:,.0f} trips<extra></extra>", cliponaxis=False))
             fig = base_layout(fig, 260, "", None)
@@ -521,8 +661,8 @@ with tab_who:
                 for origin in ["Nacional", "Regional"]:
                     g = prof[prof["origen"] == origin].set_index(dimension).reindex(order)
                     if g["share"].notna().any():
-                        fig.add_bar(x=order, y=g["share"], name=origin, marker={"color": ORIGIN_COLORS[origin]},
-                                    hovertemplate=f"{origin} · %{{x}}: %{{y:.1%}}<extra></extra>")
+                        fig.add_bar(x=[{"Bajo": "Low", "Medio": "Medium", "Medio-Alto": "Medium-high", "Alto": "High"}.get(x, x) for x in order], y=g["share"], name=df4.en(origin), marker={"color": ORIGIN_COLORS[origin]},
+                                    hovertemplate=f"{df4.en(origin)} · %{{x}}: %{{y:.1%}}<extra></extra>")
                 fig.update_layout(barmode="group", bargap=0.25, title={"text": title, "font": {"size": 14}})
                 show(base_layout(fig, 320, "Share of presences", ".0%"), f"who_{dimension}")
 
@@ -550,7 +690,7 @@ with tab_nat:
             a.metric("Share of international presences", f"{k['share']:.1%}", help="Selected years, months and visitor types.")
             b.metric("Rank among countries", f"{k['rank']} of {len(ranking)}")
             c.metric("Overnight tourists", f"{k['tourist_share']:.0%}" if pd.notna(k["tourist_share"]) else "–",
-                     help="Share of the country's presences that are 'Turista' (at least one night). The rest are day-trippers.")
+                     help="Share of the country's presences that are overnight tourists (at least one night). The rest are day-trippers.")
             d.metric("Jan–Aug 2023→2025", f"{k['growth_23_25']:+.0%}" if pd.notna(k["growth_23_25"]) else "–",
                      help="Change in January–August presences (equivalent months). Whole period, not affected by the filters.")
             e.metric("Peak month", k["peak_month"] or "–", help=f"Summer (Jun–Aug) / other months: {k['summer_ratio']:.2f}x (2023–2024).")
@@ -652,9 +792,24 @@ with tab_quality:
                                                "vs_median": "vs median", "resident_trips_vs_median": "Residents' trips vs median",
                                                "visitor_share_trips": "Visitor share of trips", "reason": "Reason"}),
                          hide_index=True, width="stretch", height=280)
-            st.markdown("**Reading.** Residents' trips are normal, but visitors are almost absent in two independent products (T4 people, "
-                        "M1 trips). Verdun also has a −83% step between July and August 2023 that no neighbour shows. The cause is upstream "
-                        "of our pipeline; the question is sent to the Business Manager.")
+            st.markdown("**Reading.** Most of these are small residential areas. Verdun and la Teixonera are different: residents' trips are normal there, "
+                        "but visitors are almost absent both in T4 (people) and in M1 (trips). The cause is upstream of our pipeline; the question is "
+                        "with the Business Manager (I8).")
+        if final["shifts"] is not None:
+            sh = final["shifts"]
+            st.subheader(f"Level shifts: {sh['barrio_name'].nunique()} of 73 neighbourhoods change level in the source")
+            st.markdown('<div class="limit">Rule: the median share of the city in the six months from a month is at least 1.5 times (or at most 1/1.5 of) the '
+                        'median of the six months before. The scan locates the shift; it cannot say if visitors or the measurement changed.</div>', unsafe_allow_html=True)
+            shown = sh[["barrio_name", "distrito_name", "product", "month", "ratio"]].assign(
+                month=pd.to_datetime(sh["month"], format="%Y%m").dt.strftime("%b %Y"), ratio=sh["ratio"].map("x{:.2f}".format))
+            st.dataframe(shown.rename(columns={"barrio_name": "Neighbourhood", "distrito_name": "District", "product": "Product", "month": "Month",
+                                               "ratio": "After / before"}), hide_index=True, width="stretch", height=320)
+        st.subheader("Open data questions")
+        st.markdown("""
+- **I7** · 43.7% of the M3 rows repeat a key with different trip counts. M3 is not used in any answer.
+- **I8** · Low-data neighbourhoods and level shifts. Values are kept and flagged.
+- **I9** · T9 has no international visitors. The age and income profile covers national and regional visitors only.
+""")
         if i3["validation"] is not None:
             v = i3["validation"]
             st.subheader(f"Aggregated data validation (2.2.2): {int((v['result'] == 'PASS').sum())} of {len(v)} checks passed")
@@ -669,7 +824,7 @@ with st.expander("Data & limits"):
 - **Trips are not visitors.** Mobility files (M1 to M3) count trips, and one person can make several. Tourism files (T1 to T9) count unique people. The two measures are never mixed in one indicator.
 - **Unique visitors are not additive.** Adding days does not give the month, and adding neighbourhoods does not give the city. City totals come from T1 and T2, not from summing T4 and T5.
 - **The privacy threshold applies.** In mobility, trips below 15 are published as 0. In tourism, segments below 15 people are grouped as NA. A 0 or an NA never means "nobody".
-- **Residents appear only in mobility** (`origen = Residente`). Tourism files contain regional, national and international visitors only. Regional visitors are always excursionists.
+- **Residents appear only in mobility** . Tourism files contain regional, national and international visitors only. Regional visitors are always day-trippers.
 - **Overnight stays (T3) exist at municipality level only**, for national and international visitors.
 - **Patterns, not causes.** The answers describe differences and changes. They do not say that tourists cause anything.
 
