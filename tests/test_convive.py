@@ -119,7 +119,7 @@ def test_robustness_labels():
     same = {s: "Yes" for s in S.STEPS}
     assert S.label(same, "Yes") == "Robust"
     assert S.label({**same, 0.20: "No"}, "Yes") == "Moderate"
-    assert S.label({**same, -0.10: "No"}, "Yes") == "Fragile"
+    assert S.label({**same, -0.10: "No"}, "Yes") == "Near threshold"
 
 
 def test_level_shift_is_found_and_stable_series_are_not():

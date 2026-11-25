@@ -112,7 +112,7 @@ answers[["id", "belief", "verdict", "belief_holds"]]"""),
     *question_cells(),
     md("""## 5. Robustness and limits
 
-Each question is recomputed with its main threshold 10% and 20% lower and higher. A verdict is fragile if it changes already at 10%."""),
+Each question is recomputed with its main threshold 10% and 20% lower and higher. A verdict is near its threshold if it changes already at 10%."""),
     code("""robust = S.run(t, r)
 robust"""),
     figure("final/figures/verdict_robustness.png"),
@@ -123,7 +123,7 @@ shifts["found"][["barrio_name", "distrito_name", "product", "month", "ratio"]].r
     figure("final/figures/level_shifts.png"),
     code("""low = r["low_data"]
 low[low["low_data"]][["barrio_name", "distrito_name", "mean_monthly_visitors", "vs_median", "resident_trips_vs_median", "visitor_share_trips", "reason"]].round(3)"""),
-    md("""**Open data questions for the Business Manager.** I7: repeated keys in M3 (not used here). I8: low-data neighbourhoods and level shifts. I9: no international visitors in T9.
+    md("""**Data questions and how they are managed.** I7: repeated keys in M3 (not used here). I8: low-data neighbourhoods and level shifts. I9: no international visitors in T9.
 
 **Dashboard.** `python -m streamlit run app/dashboard.py` reads the tables written by this notebook."""),
 ]

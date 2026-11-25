@@ -25,7 +25,7 @@ python -m streamlit run app/dashboard.py     # or start_dashboard.bat on Windows
 | 4.3.1 | Test checklist, unit tests and integration checks | `deliverables/final/4.3.1_test_checklist.md`, `tests/`, `app/check_dashboard.py` |
 | 4.3.2 | Final dashboard | `app/dashboard.py`, `start_dashboard.bat` |
 | 5.2 | Charter question and key findings | `deliverables/final/5.2_key_findings.md`, `coexistence.py` |
-| 5.3 | Robustness, level shifts, open data questions | `deliverables/final/5.3_limitations.md`, `sensitivity.py`, `breaks.py` |
+| 5.3 | Robustness, level shifts, data questions I7-I9 | `deliverables/final/5.3_limitations.md`, `sensitivity.py`, `breaks.py` |
 
 `python make_package.py` builds the hand-over zip. With `--with-tables` it adds the aggregated tables, only for people covered by the NDA. `requirements-lock.txt` holds the exact versions of the reproducibility test.
 

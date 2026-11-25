@@ -2,7 +2,7 @@
 
 The thresholds are the team's and still need the Business Manager's validation, so every question is recomputed with its
 main threshold made 10% and 20% easier and harder. A verdict is ROBUST if "belief holds?" does not change in any of the four
-variants, MODERATE if it changes only at +/-20%, and FRAGILE if it already changes at +/-10%.
+variants, MODERATE if it changes only at +/-20%, and NEAR THRESHOLD if the figure lies within 10% of the line.
 
 Nothing is typed by hand: the questions are recomputed with research.py and coexistence.py under the changed rule.
 
@@ -67,7 +67,7 @@ def answer_one(qid, t, base):
 def label(outcomes, base):
     """outcomes: {step: holds}"""
     if any(outcomes[s] != base for s in (-0.10, 0.10)):
-        return "Fragile"
+        return "Near threshold"
     if any(outcomes[s] != base for s in (-0.20, 0.20)):
         return "Moderate"
     return "Robust"

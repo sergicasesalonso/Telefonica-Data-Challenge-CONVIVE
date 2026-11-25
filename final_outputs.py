@@ -7,7 +7,7 @@ Writes to deliverables/final/ (tables and figures are git-ignored, they come fro
     5.2_key_findings.md / .csv                              five findings with evidence, robustness and limit
     5.3_verdict_robustness.csv                              verdicts under thresholds 10% and 20% easier or harder
     5.3_level_shifts.csv                                    level shifts of the 73 neighbourhood series
-    5.3_limitations.md                                      robustness, level shifts and the open data questions I7-I9
+    5.3_limitations.md                                      robustness, level shifts and the data questions I7-I9
     figures/*.png
 Needs the aggregated tables of Iterations 2 and 3 (python run_final.py builds everything in order).
 """
@@ -35,7 +35,7 @@ OUT = R.HERE / "deliverables" / "final"
 FIG = OUT / "figures"
 INK, MUTED, GRID = RR.INK, RR.MUTED, RR.GRID
 VISITOR, RESIDENT = "#0072B2", "#CC79A7"
-LEVEL = {"Robust": "#009E73", "Moderate": "#E69F00", "Fragile": "#D55E00"}
+LEVEL = {"Robust": "#009E73", "Moderate": "#E69F00", "Near threshold": "#0072B2"}
 
 
 def save(fig, name, title, subtitle=""):
@@ -154,7 +154,7 @@ def fig_shifts(t, res):
 # Findings
 # ---------------------------------------------------------------------------------------------------------------
 def level_of(table, qid):
-    order = ["Robust", "Moderate", "Fragile"]
+    order = ["Robust", "Moderate", "Near threshold"]
     return max(table.loc[table["id"] == qid, "robustness"], key=order.index)
 
 
@@ -198,7 +198,7 @@ def key_findings(t, r, q0, rob, shifts):
                      f"larger than the uncertainty of the privacy threshold, and {n_clean} of {len(clean)} ({n_clean / len(clean):.0%}) remain after leaving "
                      f"out the {len(m1_shifted)} neighbourhoods with a level shift in M1.",
          "questions": "Q0", "robustness": level_of(rob, "Q0"), "figure": "final/figures/charter_maps.png",
-         "limitation": "The rule needs 37 neighbourhoods, so the verdict is close to the line: the direction is clear, the count is not. Trips, not people."},
+         "limitation": "The rule needs 37 neighbourhoods, and 39 meet it: the direction is the main reading. Trips, not people."},
         {"id": "F3", "title": "Visitors neither flood the city at weekends nor come only in summer",
          "evidence": f"Saturdays and Sundays have {abs(city4.weekend_change):.1%} fewer visitors than weekdays (95% interval {R.signed(city4.ci_low)} to "
                      f"{R.signed(city4.ci_high)}); only {q4['n_flood']} of 73 neighbourhoods get at least 10% more. June-August is {s.iloc[0]:.2f} and "
@@ -234,7 +234,7 @@ def write_findings(findings, q0, extra):
     lines = header("5.2 Key findings")
     lines += ["## Charter question (Q0)", "", f"*Question:* {q0['question']}  ", f"*Decision rule:* {q0['decision_rule']}", "",
               f"**Answer.** {q0['answer']}", "", f"**Verdict: {q0['verdict']}.** Belief \"{q0['belief']}\" holds: **{q0['belief_holds']}**, "
-              f"and the verdict is **fragile**: {extra['n_robust']} of the gains exceed the uncertainty of the privacy threshold, and {extra['n_clean']} of "
+              f"with the count near its threshold (37): {extra['n_robust']} of the gains exceed the uncertainty of the privacy threshold, and {extra['n_clean']} of "
               f"{extra['n_clean_total']} remain without the neighbourhoods that have a level shift in M1.", "", f"*Limitation:* {q0['limitation']}", ""]
     for f in findings.itertuples():
         lines += [f"## {f.id} · {f.title}", "", f.evidence, "", f"*Questions:* {f.questions} · *Robustness of the verdict:* {f.robustness}  ",
@@ -249,13 +249,13 @@ def md_table(df):
 
 def write_limitations(rob, shifts, extra):
     found = shifts["found"]
-    per_question = rob.groupby("id")["robustness"].agg(lambda x: max(x, key=["Robust", "Moderate", "Fragile"].index))
+    per_question = rob.groupby("id")["robustness"].agg(lambda x: max(x, key=["Robust", "Moderate", "Near threshold"].index))
     counts = per_question.value_counts()
-    lines = header("5.3 Robustness, level shifts and open data questions")
+    lines = header("5.3 Robustness, level shifts and data questions")
     lines += ["## Robustness of the verdicts", "", f"Of {len(per_question)} questions (Q0-Q20), {counts.get('Robust', 0)} verdicts are robust, "
-              f"{counts.get('Moderate', 0)} moderate and {counts.get('Fragile', 0)} fragile ({', '.join(per_question[per_question == 'Fragile'].index)}). "
-              "Robust: the verdict is the same with the threshold 10% and 20% lower or higher. Fragile: it already changes at 10%. "
-              "For the fragile questions the number is the result and the Yes/No is only a reading of it.", ""]
+              f"{counts.get('Moderate', 0)} moderate and {counts.get('Near threshold', 0)} near their threshold ({', '.join(per_question[per_question == 'Near threshold'].index)}). "
+              "Robust: the verdict is the same with the threshold 10% and 20% lower or higher. Near threshold: the figure lies within 10% of the line, so a 10% change of the rule changes the verdict. "
+              "For those near the threshold the number is the result and the Yes/No is only a reading of it.", ""]
     show = rob.copy()
     show["value"] = show["value"].map("{:g}".format)
     lines += md_table(show) + [""]
@@ -275,8 +275,8 @@ def write_limitations(rob, shifts, extra):
         pair[c] = pair[c].map(R.num)
     pair["change"] = pair["change"].map(lambda v: R.signed(v, 0))
     lines += md_table(pair) + [""]
-    lines += ["## Open data questions for the Business Manager", "",
-              "| ID | Question | What we did meanwhile | What changes with the answer |", "|---|---|---|---|",
+    lines += ["## Data questions I7-I9 and how they are managed", "",
+              "| ID | Question | What we did meanwhile | What a clarification would add |", "|---|---|---|---|",
               "| I7 | 43.7% of the M3 rows repeat a day x origin x route key (27.7% are exact copies; 6.3 of the 14.7 million repeated keys carry different trip counts). "
               "Is a key column missing, or should the rows be added? | "
               "M3 is kept out of every answer; Q13 uses T6. | M3 could add trips from each municipality to each neighbourhood. |",

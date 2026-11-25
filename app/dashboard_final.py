@@ -45,8 +45,8 @@ def available(t):
 
 
 def robustness_of(t, qid):
-    """Weakest robustness label of a question (Robust, Moderate, Fragile), or None."""
-    order = ["Robust", "Moderate", "Fragile"]
+    """Weakest robustness label of a question (Robust, Moderate, Near threshold), or None."""
+    order = ["Robust", "Moderate", "Near threshold"]
     if t["robustness"] is None:
         return None
     labels = t["robustness"].loc[t["robustness"]["id"] == qid, "robustness"]

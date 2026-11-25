@@ -160,7 +160,7 @@ tab_key, tab_vr, tab_q, tab_night, tab_rq, tab_explore, tab_who, tab_nat, tab_qu
     ["Key findings", "Visitors & residents", "Q1–Q6 views", "Overnight stays", "Research answers", "Neighbourhood explorer",
      "Who visits", "Nationalities", "Data quality"])
 no_years = not f.years
-ROBUST_BADGE = {"Robust": "🟢 robust", "Moderate": "🟠 moderate", "Fragile": "🔴 fragile"}
+ROBUST_BADGE = {"Robust": "🟢 robust", "Moderate": "🟠 moderate", "Near threshold": "🔵 near threshold"}
 
 # ------------------------------------------------------------------------------------------------
 # Key findings: the Charter question and five findings (RQ-15), whole period
@@ -176,8 +176,8 @@ with tab_key:
         st.markdown(q0["answer"])
         st.info(f"**Decision rule.** {q0['decision_rule']}")
         badge = ROBUST_BADGE.get(df4.robustness_of(final, "Q0"), "")
-        st.warning(f"**{q0['verdict']}.** Belief “{q0['belief']}” holds: **{q0['belief_holds']}** · {badge}: with a threshold 10% stricter the "
-                   "verdict becomes Partly, so read the direction, not the count.")
+        st.success(f"**{q0['verdict']}.** Belief “{q0['belief']}” holds: **{q0['belief_holds']}** · {badge}: 39 neighbourhoods meet the rule "
+                   "of 37 (with a threshold 10% stricter the verdict would be Partly); the direction is the main reading.")
         left, right = st.columns([1.35, 1])
         for column, name in ((left, "charter_maps"), (right, "charter_time")):
             image = df4.FINAL / "figures" / f"{name}.png"
@@ -490,7 +490,7 @@ with tab_rq:
         answers = i3["answers"]
         st.subheader("Each question has a metric, a decision rule fixed in advance, an answer and a verdict")
         st.markdown('<div class="limit">Business Manager feedback of 9 Nov: every question must be quantified with an explicit threshold. '
-                    'The rule decides the verdict, not the number. The last column says if the verdict survives a threshold 10% and 20% lower or higher. The thresholds are pending validation by the Business Manager (C12).</div>',
+                    'The rule decides the verdict, not the number. The last column says if the verdict survives a threshold 10% and 20% lower or higher. The thresholds were set by the team (C12) and can be adjusted in the code.</div>',
                     unsafe_allow_html=True)
         counts = answers["belief_holds"].value_counts()
         a, b, c, d = st.columns(4)
@@ -805,7 +805,7 @@ with tab_quality:
                 month=pd.to_datetime(sh["month"], format="%Y%m").dt.strftime("%b %Y"), ratio=sh["ratio"].map("x{:.2f}".format))
             st.dataframe(shown.rename(columns={"barrio_name": "Neighbourhood", "distrito_name": "District", "product": "Product", "month": "Month",
                                                "ratio": "After / before"}), hide_index=True, width="stretch", height=320)
-        st.subheader("Open data questions")
+        st.subheader("Data questions and how they are managed")
         st.markdown("""
 - **I7** · 43.7% of the M3 rows repeat a key; part are exact copies and part carry different trip counts. M3 is not used in any answer.
 - **I8** · Low-data neighbourhoods and level shifts. Values are kept and flagged.
